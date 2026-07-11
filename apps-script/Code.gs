@@ -77,23 +77,46 @@ function doGet(e) {
     if (e.parameter.obras === "1") {
       return jsonOutput_(obtenerObras_());
     }
+    if (e.parameter.mes && e.parameter.anio) {
+      var mes = parseInt(e.parameter.mes, 10);
+      var anio = parseInt(e.parameter.anio, 10);
+      return jsonOutput_(obtenerGastosPorMes_(mes, anio));
+    }
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return jsonOutput_([]);
     var numRows = Math.min(30, lastRow - 1);
     var startRow = lastRow - numRows + 1;
     var values = sheet.getRange(startRow, 1, numRows, 13).getValues();
-    var gastos = values.map(function (r) {
-      return {
-        fecha: r[0], descripcion: r[1], comercio: r[2], categoria: r[3],
-        valor: r[4], estado: r[5], notas: r[6], fotoUrl: r[8], obra: r[10], id: r[11],
-        nit: r[12],
-      };
-    }).reverse();
+    var gastos = values.map(filaAGasto_).reverse();
     return jsonOutput_(gastos);
   } catch (err) {
     return jsonOutput_({ error: String(err) });
   }
+}
+
+function obtenerGastosPorMes_(mes, anio) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var values = sheet.getRange(2, 1, lastRow - 1, 13).getValues();
+  var gastos = [];
+  values.forEach(function (r) {
+    var fecha = r[0];
+    if (fecha instanceof Date && fecha.getMonth() + 1 === mes && fecha.getFullYear() === anio) {
+      gastos.push(filaAGasto_(r));
+    }
+  });
+  gastos.reverse();
+  return gastos;
+}
+
+function filaAGasto_(r) {
+  return {
+    fecha: r[0], descripcion: r[1], comercio: r[2], categoria: r[3],
+    valor: r[4], estado: r[5], notas: r[6], fotoUrl: r[8], obra: r[10], id: r[11],
+    nit: r[12],
+  };
 }
 
 function obtenerObras_() {

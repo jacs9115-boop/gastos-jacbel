@@ -39,7 +39,10 @@
   header .brand { display: flex; align-items: center; gap: 10px; }
   header .brand img { width: 34px; height: 34px; border-radius: 8px; background: #fff; }
   header h1 { font-size: 17px; margin: 0; font-weight: 700; line-height: 1.15; }
-  header .total { font-size: 12px; opacity: 0.85; }
+  header .total { font-size: 12px; opacity: 0.9; background: none; border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 100px; color: #fff; padding: 6px 12px; font-family: inherit; text-align: right; }
+  .mes-selectores { display: flex; gap: 10px; }
+  .mes-selectores select { flex: 1; }
   main { padding: 14px; max-width: 560px; margin: 0 auto; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
     padding: 14px 16px; margin-bottom: 12px; }
@@ -102,7 +105,7 @@
     <img src="icons/icon-180.png" alt="Logo JACBEL" />
     <h1>Gastos JACBEL</h1>
   </div>
-  <div class="total" id="totalMes">Cargando...</div>
+  <button type="button" class="total" id="btnMes">Cargando...</button>
 </header>
 
 <main id="lista">
@@ -135,6 +138,21 @@
     <button type="button" class="btn-secondary" id="btnCancelar">Cancelar</button>
     <div class="status" id="status"></div>
   </form>
+</div>
+
+<div class="sheet-overlay" id="overlayMes"></div>
+
+<div class="sheet" id="sheetMes">
+  <h2>Ver gastos de otro mes</h2>
+  <div class="field">
+    <label for="selectMes">Mes y año</label>
+    <div class="mes-selectores">
+      <select id="selectMes"></select>
+      <select id="selectAnio"></select>
+    </div>
+  </div>
+  <button type="button" class="btn-primary" id="btnVerMes">Ver resumen</button>
+  <button type="button" class="btn-secondary" id="btnCancelarMes">Cancelar</button>
 </div>
 
 <div class="sheet-overlay" id="overlayEdit"></div>
@@ -195,6 +213,14 @@ const form = document.getElementById("form");
 const status = document.getElementById("status");
 const btnGuardar = document.getElementById("btnGuardar");
 
+const overlayMes = document.getElementById("overlayMes");
+const sheetMes = document.getElementById("sheetMes");
+const btnMes = document.getElementById("btnMes");
+const btnCancelarMes = document.getElementById("btnCancelarMes");
+const btnVerMes = document.getElementById("btnVerMes");
+const selectMes = document.getElementById("selectMes");
+const selectAnio = document.getElementById("selectAnio");
+
 const overlayEdit = document.getElementById("overlayEdit");
 const sheetEdit = document.getElementById("sheetEdit");
 const formEdit = document.getElementById("formEdit");
@@ -203,6 +229,38 @@ const btnCancelarEdit = document.getElementById("btnCancelarEdit");
 const editCategoriaSelect = document.getElementById("editCategoria");
 
 editCategoriaSelect.innerHTML = CATEGORIAS.map((c) => `<option value="${c}">${c}</option>`).join("");
+
+const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
+  "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+const hoy = new Date();
+let mesActual = hoy.getMonth() + 1;
+let anioActual = hoy.getFullYear();
+
+selectMes.innerHTML = MESES.map((m, i) => `<option value="${i + 1}">${m}</option>`).join("");
+const anios = [];
+for (let a = hoy.getFullYear(); a >= hoy.getFullYear() - 4; a--) anios.push(a);
+selectAnio.innerHTML = anios.map((a) => `<option value="${a}">${a}</option>`).join("");
+
+function abrirSheetMes() {
+  selectMes.value = mesActual;
+  selectAnio.value = anioActual;
+  overlayMes.classList.add("open");
+  sheetMes.classList.add("open");
+}
+function cerrarSheetMes() {
+  overlayMes.classList.remove("open");
+  sheetMes.classList.remove("open");
+}
+btnMes.addEventListener("click", abrirSheetMes);
+btnCancelarMes.addEventListener("click", cerrarSheetMes);
+overlayMes.addEventListener("click", cerrarSheetMes);
+btnVerMes.addEventListener("click", () => {
+  mesActual = Number(selectMes.value);
+  anioActual = Number(selectAnio.value);
+  cerrarSheetMes();
+  cargarGastos();
+});
 
 function abrirSheet() {
   overlay.classList.add("open");
@@ -262,19 +320,16 @@ window.abrirEdicion = abrirEdicion;
 function renderLista(gastos) {
   gastosActuales = gastos;
   const main = document.getElementById("lista");
+
+  const nombreMes = MESES[mesActual - 1];
+  const esMesActual = mesActual === (hoy.getMonth() + 1) && anioActual === hoy.getFullYear();
+  const totalMes = gastos.reduce((sum, g) => sum + (g.valor || 0), 0);
+  btnMes.innerHTML = `${esMesActual ? "Este mes" : nombreMes + " " + anioActual}: ${fmt.format(totalMes)} ▾`;
+
   if (!gastos.length) {
-    main.innerHTML = '<div class="card empty">Todavía no has registrado gastos.<br/>Toca el botón + para agregar el primero.</div>';
+    main.innerHTML = `<div class="card empty">No hay gastos registrados en ${nombreMes} ${anioActual}.<br/>Toca el botón + para agregar uno, o el total de arriba para ver otro mes.</div>`;
     return;
   }
-  const totalMes = gastos.reduce((sum, g) => {
-    const gFecha = new Date(g.fecha);
-    const hoy = new Date();
-    if (gFecha.getMonth() === hoy.getMonth() && gFecha.getFullYear() === hoy.getFullYear()) {
-      return sum + (g.valor || 0);
-    }
-    return sum;
-  }, 0);
-  document.getElementById("totalMes").textContent = "Este mes: " + fmt.format(totalMes);
 
   main.innerHTML = gastos.map((g) => `
     <div class="card gasto">
@@ -296,7 +351,8 @@ function renderLista(gastos) {
 
 async function cargarGastos() {
   try {
-    const res = await fetch(API_BASE + "/api/gastos");
+    btnMes.textContent = "Cargando...";
+    const res = await fetch(`${API_BASE}/api/gastos?mes=${mesActual}&anio=${anioActual}`);
     const data = await res.json();
     renderLista(data);
   } catch (e) {

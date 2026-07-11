@@ -116,7 +116,12 @@ Reglas:
 app.get("/api/gastos", async (req, res) => {
   try {
     requireAppsScriptUrl();
-    const scriptRes = await fetch(APPS_SCRIPT_URL);
+    const { mes, anio } = req.query;
+    let url = APPS_SCRIPT_URL;
+    if (mes && anio) {
+      url += `?mes=${encodeURIComponent(mes)}&anio=${encodeURIComponent(anio)}`;
+    }
+    const scriptRes = await fetch(url);
     const gastos = await scriptRes.json();
     res.json(gastos);
   } catch (err) {
