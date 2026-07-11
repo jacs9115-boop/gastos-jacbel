@@ -2,7 +2,7 @@
 var FOLDER_ID = "1D8FpmwzMobg4z6_6tYFuaPEqSAWYy730";
 
 // Columnas de la hoja: A Fecha, B Descripcion, C Comercio, D Categoria, E Valor,
-// F Estado, G Notas, H Foto, I Foto URL, J Registrado, K Obra, L ID
+// F Estado, G Notas, H Foto, I Foto URL, J Registrado, K Obra, L ID, M NIT
 
 function doPost(e) {
   try {
@@ -24,6 +24,7 @@ function crearGasto_(body) {
   var valor = body.valor || 0;
   var notas = body.notas || "";
   var obra = body.obra || "";
+  var nit = body.nit || "";
 
   var folder = DriveApp.getFolderById(FOLDER_ID);
   var decoded = Utilities.base64Decode(body.fotoBase64);
@@ -38,12 +39,12 @@ function crearGasto_(body) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
   sheet.appendRow([
     fecha, descripcion, comercio, categoria, valor, "Pendiente revision", notas,
-    '=IMAGE("' + thumbnailUrl + '")', viewUrl, new Date().toISOString(), obra, id,
+    '=IMAGE("' + thumbnailUrl + '")', viewUrl, new Date().toISOString(), obra, id, nit,
   ]);
 
   return jsonOutput_({
     ok: true, id: id, fecha: fecha, descripcion: descripcion, comercio: comercio,
-    categoria: categoria, valor: valor, notas: notas, obra: obra, fotoUrl: viewUrl,
+    categoria: categoria, valor: valor, notas: notas, obra: obra, nit: nit, fotoUrl: viewUrl,
   });
 }
 
@@ -66,6 +67,7 @@ function editarGasto_(body) {
   sheet.getRange(rowIndex, 5).setValue(body.valor || 0);
   sheet.getRange(rowIndex, 7).setValue(body.notas || "");
   sheet.getRange(rowIndex, 11).setValue(body.obra || "");
+  sheet.getRange(rowIndex, 13).setValue(body.nit || "");
 
   return jsonOutput_({ ok: true, id: body.id });
 }
@@ -80,11 +82,12 @@ function doGet(e) {
     if (lastRow < 2) return jsonOutput_([]);
     var numRows = Math.min(30, lastRow - 1);
     var startRow = lastRow - numRows + 1;
-    var values = sheet.getRange(startRow, 1, numRows, 12).getValues();
+    var values = sheet.getRange(startRow, 1, numRows, 13).getValues();
     var gastos = values.map(function (r) {
       return {
         fecha: r[0], descripcion: r[1], comercio: r[2], categoria: r[3],
         valor: r[4], estado: r[5], notas: r[6], fotoUrl: r[8], obra: r[10], id: r[11],
+        nit: r[12],
       };
     }).reverse();
     return jsonOutput_(gastos);

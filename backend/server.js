@@ -46,6 +46,7 @@ Extrae del recibo/factura estos datos y responde UNICAMENTE con un JSON valido, 
 {
   "fecha": "YYYY-MM-DD",
   "comercio": "nombre del comercio o proveedor",
+  "nit": "NIT o numero de identificacion tributaria del comercio o proveedor",
   "valor": 12345,
   "categoria": "una de estas: ${CATEGORIAS.join(", ")}",
   "notas": "detalle breve opcional, por ejemplo items comprados"
@@ -53,6 +54,7 @@ Extrae del recibo/factura estos datos y responde UNICAMENTE con un JSON valido, 
 
 Reglas:
 - "valor" es el total pagado en pesos colombianos (COP), como numero entero sin puntos ni comas ni simbolo de moneda.
+- "nit" debe copiarse tal como aparece impreso en la factura (con puntos y guion si los tiene, por ejemplo "900.123.456-7"). Suele estar cerca del nombre del comercio, a veces con la etiqueta "NIT" o "Nit.". Si no aparece ningun NIT legible en la foto, deja este campo como cadena vacia "".
 - Si no logras leer la fecha en la foto, usa la fecha de hoy.
 - Si no logras leer el comercio, usa la descripcion del usuario para inferirlo.
 - "categoria" debe ser exactamente una de las opciones listadas.
@@ -83,6 +85,7 @@ Reglas:
 
     const fecha = extraido.fecha || new Date().toISOString().slice(0, 10);
     const comercio = extraido.comercio || "";
+    const nit = extraido.nit || "";
     const valor = Number(extraido.valor) || 0;
     const categoria = CATEGORIAS.includes(extraido.categoria) ? extraido.categoria : "Otros";
     const notas = extraido.notas || "";
@@ -94,7 +97,7 @@ Reglas:
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        fecha, descripcion, comercio, categoria, valor, notas, obra,
+        fecha, descripcion, comercio, categoria, valor, notas, obra, nit,
         fotoBase64: base64Image, fotoMimeType: mediaType, fotoNombre,
       }),
     });
@@ -137,13 +140,13 @@ app.get("/api/obras", async (req, res) => {
 app.put("/api/gastos/:id", async (req, res) => {
   try {
     requireAppsScriptUrl();
-    const { fecha, descripcion, comercio, categoria, valor, notas, obra } = req.body;
+    const { fecha, descripcion, comercio, categoria, valor, notas, obra, nit } = req.body;
     const scriptRes = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         accion: "editar", id: req.params.id,
-        fecha, descripcion, comercio, categoria, valor: Number(valor) || 0, notas, obra,
+        fecha, descripcion, comercio, categoria, valor: Number(valor) || 0, notas, obra, nit,
       }),
     });
     const scriptData = await scriptRes.json();

@@ -36,7 +36,9 @@
   header { position: sticky; top: 0; z-index: 5; background: var(--navy); color: #fff;
     padding: calc(14px + env(safe-area-inset-top)) 18px 14px; display: flex; align-items: center;
     justify-content: space-between; }
-  header h1 { font-size: 19px; margin: 0; font-weight: 700; }
+  header .brand { display: flex; align-items: center; gap: 10px; }
+  header .brand img { width: 34px; height: 34px; border-radius: 8px; background: #fff; }
+  header h1 { font-size: 17px; margin: 0; font-weight: 700; line-height: 1.15; }
   header .total { font-size: 12px; opacity: 0.85; }
   main { padding: 14px; max-width: 560px; margin: 0 auto; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
@@ -96,7 +98,10 @@
 <body>
 
 <header>
-  <h1>Gastos JACBEL</h1>
+  <div class="brand">
+    <img src="icons/icon-180.png" alt="Logo JACBEL" />
+    <h1>Gastos JACBEL</h1>
+  </div>
   <div class="total" id="totalMes">Cargando...</div>
 </header>
 
@@ -144,6 +149,10 @@
     <div class="field">
       <label for="editComercio">Comercio</label>
       <input type="text" id="editComercio" name="comercio" />
+    </div>
+    <div class="field">
+      <label for="editNit">NIT</label>
+      <input type="text" id="editNit" name="nit" placeholder="Ej: 900.123.456-7" />
     </div>
     <div class="field">
       <label for="editCategoria">Categoría</label>
@@ -238,6 +247,7 @@ function abrirEdicion(id) {
   if (!g) return;
   document.getElementById("editFecha").value = (g.fecha || "").slice(0, 10);
   document.getElementById("editComercio").value = g.comercio || "";
+  document.getElementById("editNit").value = g.nit || "";
   document.getElementById("editCategoria").value = CATEGORIAS.includes(g.categoria) ? g.categoria : "Otros";
   document.getElementById("editValor").value = g.valor || 0;
   document.getElementById("editObra").value = g.obra || "";
@@ -270,7 +280,7 @@ function renderLista(gastos) {
     <div class="card gasto">
       <div class="left">
         <div class="comercio">${g.comercio || "Sin nombre"}</div>
-        <div class="meta">${(g.fecha || "").slice(0, 10)} · ${g.categoria || "Otros"}</div>
+        <div class="meta">${(g.fecha || "").slice(0, 10)} · ${g.categoria || "Otros"}${g.nit ? ` · NIT ${g.nit}` : ""}</div>
         ${g.obra ? `<div class="obra">🏗️ ${g.obra}</div>` : ""}
         ${g.descripcion ? `<div class="desc">"${g.descripcion}"</div>` : ""}
         <span class="badge">${g.estado || "Registrado"}</span>
@@ -340,6 +350,7 @@ formEdit.addEventListener("submit", async (e) => {
   const payload = {
     fecha: document.getElementById("editFecha").value,
     comercio: document.getElementById("editComercio").value.trim(),
+    nit: document.getElementById("editNit").value.trim(),
     categoria: document.getElementById("editCategoria").value,
     valor: Number(document.getElementById("editValor").value) || 0,
     obra: document.getElementById("editObra").value.trim(),
