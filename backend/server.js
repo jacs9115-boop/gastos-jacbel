@@ -32,6 +32,7 @@ app.post("/api/gastos", upload.single("foto"), async (req, res) => {
   try {
     requireAppsScriptUrl();
     const descripcion = (req.body.descripcion || "").trim();
+    const obra = (req.body.obra || "").trim();
     if (!req.file) {
       return res.status(400).json({ error: "Falta la foto de la factura" });
     }
@@ -93,7 +94,7 @@ Reglas:
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        fecha, descripcion, comercio, categoria, valor, notas,
+        fecha, descripcion, comercio, categoria, valor, notas, obra,
         fotoBase64: base64Image, fotoMimeType: mediaType, fotoNombre,
       }),
     });
@@ -115,6 +116,41 @@ app.get("/api/gastos", async (req, res) => {
     const scriptRes = await fetch(APPS_SCRIPT_URL);
     const gastos = await scriptRes.json();
     res.json(gastos);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Error inesperado" });
+  }
+});
+
+app.get("/api/obras", async (req, res) => {
+  try {
+    requireAppsScriptUrl();
+    const scriptRes = await fetch(`${APPS_SCRIPT_URL}?obras=1`);
+    const obras = await scriptRes.json();
+    res.json(obras);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Error inesperado" });
+  }
+});
+
+app.put("/api/gastos/:id", async (req, res) => {
+  try {
+    requireAppsScriptUrl();
+    const { fecha, descripcion, comercio, categoria, valor, notas, obra } = req.body;
+    const scriptRes = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accion: "editar", id: req.params.id,
+        fecha, descripcion, comercio, categoria, valor: Number(valor) || 0, notas, obra,
+      }),
+    });
+    const scriptData = await scriptRes.json();
+    if (!scriptData.ok) {
+      return res.status(502).json({ error: scriptData.error || "Error al editar el gasto" });
+    }
+    res.json(scriptData);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message || "Error inesperado" });

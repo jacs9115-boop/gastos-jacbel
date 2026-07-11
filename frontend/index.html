@@ -46,12 +46,15 @@
   .gasto .left { min-width: 0; }
   .gasto .comercio { font-weight: 700; font-size: 15px; }
   .gasto .meta { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .gasto .obra { font-size: 12px; color: var(--navy); font-weight: 600; margin-top: 2px; }
   .gasto .desc { font-size: 12.5px; color: var(--muted); margin-top: 3px; font-style: italic; }
   .gasto .valor { font-weight: 700; font-size: 15px; white-space: nowrap; }
+  .gasto .right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
   .badge { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 2px 8px;
     border-radius: 100px; background: var(--navy); color: #fff; opacity: 0.85; margin-top: 6px; }
-  .foto-link { display: inline-block; font-size: 11.5px; font-weight: 600; color: var(--navy);
-    margin-top: 6px; margin-left: 6px; text-decoration: none; }
+  .links-row { margin-top: 6px; display: flex; gap: 14px; }
+  .foto-link, .edit-link { font-size: 11.5px; font-weight: 600; color: var(--navy);
+    text-decoration: none; background: none; border: none; padding: 0; font-family: inherit; }
   .fab { position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom));
     width: 60px; height: 60px; border-radius: 50%; background: var(--navy); color: #fff;
     border: none; font-size: 30px; box-shadow: 0 6px 18px rgba(0,0,0,0.25); display: flex;
@@ -63,13 +66,14 @@
   .sheet { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg);
     border-radius: 20px 20px 0 0; padding: 16px 18px calc(24px + env(safe-area-inset-bottom));
     transform: translateY(100%); transition: transform 0.25s ease; z-index: 21; max-height: 88vh;
-    overflow-y: auto; }
-  .sheet.open { transform: translateY(0); }
+    overflow-y: auto; display: none; }
+  .sheet.open { transform: translateY(0); display: block; }
   .sheet h2 { margin: 4px 0 14px; font-size: 18px; }
   .field { margin-bottom: 14px; }
   .field label { display: block; font-size: 13px; font-weight: 600; color: var(--muted);
     margin-bottom: 6px; }
-  textarea, input[type="text"] { width: 100%; border: 1px solid var(--border); border-radius: 10px;
+  textarea, input[type="text"], input[type="number"], input[type="date"], select {
+    width: 100%; border: 1px solid var(--border); border-radius: 10px;
     padding: 12px; font-size: 15px; background: var(--card); color: var(--text); font-family: inherit; }
   textarea { min-height: 70px; resize: vertical; }
   .photo-btn { display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -103,12 +107,18 @@
 <button class="fab" id="btnAbrir" aria-label="Agregar gasto">+</button>
 
 <div class="sheet-overlay" id="overlay"></div>
+
 <div class="sheet" id="sheet">
   <h2>Nuevo gasto</h2>
   <form id="form">
     <div class="field">
       <label for="descripcion">¿Qué te gastaste? (puedes usar el micrófono del teclado)</label>
       <textarea id="descripcion" name="descripcion" placeholder="Ej: compré 5 sacos de cemento en la ferretería"></textarea>
+    </div>
+    <div class="field">
+      <label for="obra">Obra</label>
+      <input type="text" id="obra" name="obra" list="obras-list" placeholder="Nombre de la obra" />
+      <datalist id="obras-list"></datalist>
     </div>
     <div class="field">
       <label>Foto de la factura</label>
@@ -122,8 +132,50 @@
   </form>
 </div>
 
+<div class="sheet-overlay" id="overlayEdit"></div>
+
+<div class="sheet" id="sheetEdit">
+  <h2>Editar gasto</h2>
+  <form id="formEdit">
+    <div class="field">
+      <label for="editFecha">Fecha</label>
+      <input type="date" id="editFecha" name="fecha" />
+    </div>
+    <div class="field">
+      <label for="editComercio">Comercio</label>
+      <input type="text" id="editComercio" name="comercio" />
+    </div>
+    <div class="field">
+      <label for="editCategoria">Categoría</label>
+      <select id="editCategoria" name="categoria"></select>
+    </div>
+    <div class="field">
+      <label for="editValor">Valor (COP)</label>
+      <input type="number" id="editValor" name="valor" min="0" step="1" />
+    </div>
+    <div class="field">
+      <label for="editObra">Obra</label>
+      <input type="text" id="editObra" name="obra" list="obras-list" placeholder="Nombre de la obra" />
+    </div>
+    <div class="field">
+      <label for="editDescripcion">Descripción</label>
+      <textarea id="editDescripcion" name="descripcion"></textarea>
+    </div>
+    <div class="field">
+      <label for="editNotas">Notas</label>
+      <textarea id="editNotas" name="notas"></textarea>
+    </div>
+    <button type="submit" class="btn-primary" id="btnGuardarEdit">Guardar cambios</button>
+    <button type="button" class="btn-secondary" id="btnCancelarEdit">Cancelar</button>
+    <div class="status" id="statusEdit"></div>
+  </form>
+</div>
+
 <script>
 const API_BASE = "";
+const CATEGORIAS = ["Materiales", "Combustible", "Alimentacion", "Herramientas",
+  "Transporte", "Servicios", "Papeleria", "Mantenimiento", "Otros"];
+
 const overlay = document.getElementById("overlay");
 const sheet = document.getElementById("sheet");
 const btnAbrir = document.getElementById("btnAbrir");
@@ -133,6 +185,15 @@ const preview = document.getElementById("preview");
 const form = document.getElementById("form");
 const status = document.getElementById("status");
 const btnGuardar = document.getElementById("btnGuardar");
+
+const overlayEdit = document.getElementById("overlayEdit");
+const sheetEdit = document.getElementById("sheetEdit");
+const formEdit = document.getElementById("formEdit");
+const statusEdit = document.getElementById("statusEdit");
+const btnCancelarEdit = document.getElementById("btnCancelarEdit");
+const editCategoriaSelect = document.getElementById("editCategoria");
+
+editCategoriaSelect.innerHTML = CATEGORIAS.map((c) => `<option value="${c}">${c}</option>`).join("");
 
 function abrirSheet() {
   overlay.classList.add("open");
@@ -149,6 +210,14 @@ btnAbrir.addEventListener("click", abrirSheet);
 btnCancelar.addEventListener("click", cerrarSheet);
 overlay.addEventListener("click", cerrarSheet);
 
+function cerrarSheetEdit() {
+  overlayEdit.classList.remove("open");
+  sheetEdit.classList.remove("open");
+  statusEdit.textContent = "";
+}
+btnCancelarEdit.addEventListener("click", cerrarSheetEdit);
+overlayEdit.addEventListener("click", cerrarSheetEdit);
+
 fotoInput.addEventListener("change", () => {
   const file = fotoInput.files[0];
   if (!file) return;
@@ -162,7 +231,26 @@ fotoInput.addEventListener("change", () => {
 
 const fmt = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
 
+let gastosActuales = [];
+
+function abrirEdicion(id) {
+  const g = gastosActuales.find((x) => x.id === id);
+  if (!g) return;
+  document.getElementById("editFecha").value = (g.fecha || "").slice(0, 10);
+  document.getElementById("editComercio").value = g.comercio || "";
+  document.getElementById("editCategoria").value = CATEGORIAS.includes(g.categoria) ? g.categoria : "Otros";
+  document.getElementById("editValor").value = g.valor || 0;
+  document.getElementById("editObra").value = g.obra || "";
+  document.getElementById("editDescripcion").value = g.descripcion || "";
+  document.getElementById("editNotas").value = g.notas || "";
+  formEdit.dataset.id = id;
+  overlayEdit.classList.add("open");
+  sheetEdit.classList.add("open");
+}
+window.abrirEdicion = abrirEdicion;
+
 function renderLista(gastos) {
+  gastosActuales = gastos;
   const main = document.getElementById("lista");
   if (!gastos.length) {
     main.innerHTML = '<div class="card empty">Todavía no has registrado gastos.<br/>Toca el botón + para agregar el primero.</div>';
@@ -182,10 +270,14 @@ function renderLista(gastos) {
     <div class="card gasto">
       <div class="left">
         <div class="comercio">${g.comercio || "Sin nombre"}</div>
-        <div class="meta">${g.fecha || ""} · ${g.categoria || "Otros"}</div>
+        <div class="meta">${(g.fecha || "").slice(0, 10)} · ${g.categoria || "Otros"}</div>
+        ${g.obra ? `<div class="obra">🏗️ ${g.obra}</div>` : ""}
         ${g.descripcion ? `<div class="desc">"${g.descripcion}"</div>` : ""}
         <span class="badge">${g.estado || "Registrado"}</span>
-        ${g.fotoUrl ? `<a class="foto-link" href="${g.fotoUrl}" target="_blank" rel="noopener">📎 Ver factura</a>` : ""}
+        <div class="links-row">
+          ${g.fotoUrl ? `<a class="foto-link" href="${g.fotoUrl}" target="_blank" rel="noopener">📎 Ver factura</a>` : ""}
+          ${g.id ? `<button type="button" class="edit-link" onclick="abrirEdicion('${g.id}')">✏️ Editar</button>` : ""}
+        </div>
       </div>
       <div class="valor">${fmt.format(g.valor || 0)}</div>
     </div>
@@ -202,9 +294,20 @@ async function cargarGastos() {
   }
 }
 
+async function cargarObras() {
+  try {
+    const res = await fetch(API_BASE + "/api/obras");
+    const data = await res.json();
+    document.getElementById("obras-list").innerHTML = data.map((o) => `<option value="${o}"></option>`).join("");
+  } catch (e) {
+    // sin conexion, se ignora: el campo de obra sigue funcionando como texto libre
+  }
+}
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const descripcion = document.getElementById("descripcion").value.trim();
+  const obra = document.getElementById("obra").value.trim();
   const file = fotoInput.files[0];
   if (!file) {
     status.textContent = "Adjunta la foto de la factura.";
@@ -215,6 +318,7 @@ form.addEventListener("submit", async (e) => {
 
   const fd = new FormData();
   fd.append("descripcion", descripcion);
+  fd.append("obra", obra);
   fd.append("foto", file);
 
   try {
@@ -222,11 +326,39 @@ form.addEventListener("submit", async (e) => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Error al guardar");
     status.textContent = "Gasto guardado ✓";
-    setTimeout(() => { cerrarSheet(); cargarGastos(); }, 700);
+    setTimeout(() => { cerrarSheet(); cargarGastos(); cargarObras(); }, 700);
   } catch (err) {
     status.textContent = "Error: " + err.message;
   } finally {
     btnGuardar.disabled = false;
+  }
+});
+
+formEdit.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = formEdit.dataset.id;
+  const payload = {
+    fecha: document.getElementById("editFecha").value,
+    comercio: document.getElementById("editComercio").value.trim(),
+    categoria: document.getElementById("editCategoria").value,
+    valor: Number(document.getElementById("editValor").value) || 0,
+    obra: document.getElementById("editObra").value.trim(),
+    descripcion: document.getElementById("editDescripcion").value.trim(),
+    notas: document.getElementById("editNotas").value.trim(),
+  };
+  statusEdit.innerHTML = '<span class="spinner"></span> Guardando...';
+  try {
+    const res = await fetch(`${API_BASE}/api/gastos/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Error al guardar los cambios");
+    statusEdit.textContent = "Cambios guardados ✓";
+    setTimeout(() => { cerrarSheetEdit(); cargarGastos(); cargarObras(); }, 700);
+  } catch (err) {
+    statusEdit.textContent = "Error: " + err.message;
   }
 });
 
@@ -235,6 +367,7 @@ if ("serviceWorker" in navigator) {
 }
 
 cargarGastos();
+cargarObras();
 </script>
 </body>
 </html>
