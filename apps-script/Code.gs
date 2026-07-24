@@ -2,8 +2,8 @@
 var FOLDER_ID = "1D8FpmwzMobg4z6_6tYFuaPEqSAWYy730";
 
 // Columnas de la hoja "Gastos" (primera hoja): A Fecha, B Descripcion, C Comercio,
-// D Categoria, E Valor, F Estado, G Notas, H Foto, I Foto URL, J Registrado, K Obra,
-// L ID, M NIT, N Trabajador (caja menor), O CajaMenorId
+// D Categoria, E Valor, F Estado, G (sin uso, antes Notas), H Foto, I Foto URL, J Registrado,
+// K Obra, L ID, M NIT, N Trabajador (caja menor), O CajaMenorId
 
 function doPost(e) {
   try {
@@ -29,7 +29,7 @@ function crearGasto_(body) {
   var comercio = body.comercio || "";
   var categoria = body.categoria || "";
   var valor = body.valor || 0;
-  var notas = body.notas || "";
+  var notas = "";
   var obra = body.obra || "";
   var nit = body.nit || "";
   var estado = body.estado || "Pendiente revision";
@@ -60,7 +60,7 @@ function crearGasto_(body) {
 
   return jsonOutput_({
     ok: true, id: id, fecha: fecha, descripcion: descripcion, comercio: comercio,
-    categoria: categoria, valor: valor, notas: notas, obra: obra, nit: nit, fotoUrl: viewUrl,
+    categoria: categoria, valor: valor, obra: obra, nit: nit, fotoUrl: viewUrl,
     estado: estado, trabajador: trabajador,
   });
 }
@@ -83,7 +83,6 @@ function editarGasto_(body) {
   sheet.getRange(rowIndex, 4).setValue(body.categoria || "");
   sheet.getRange(rowIndex, 5).setValue(body.valor || 0);
   if (body.estado) sheet.getRange(rowIndex, 6).setValue(body.estado);
-  sheet.getRange(rowIndex, 7).setValue(body.notas || "");
   sheet.getRange(rowIndex, 11).setValue(body.obra || "");
   sheet.getRange(rowIndex, 13).setValue(body.nit || "");
 
@@ -162,7 +161,7 @@ function obtenerAnioMes_(fecha) {
 function filaAGasto_(r) {
   return {
     fecha: r[0], descripcion: r[1], comercio: r[2], categoria: r[3],
-    valor: r[4], estado: r[5], notas: r[6], fotoUrl: r[8], obra: r[10], id: r[11],
+    valor: r[4], estado: r[5], fotoUrl: r[8], obra: r[10], id: r[11],
     nit: r[12], trabajador: r[13] || "", cajaMenorId: r[14] || "",
   };
 }
