@@ -17,6 +17,10 @@ const CATEGORIAS = [
   "Transporte", "Servicios", "Papeleria", "Mantenimiento", "Otros",
 ];
 
+// No se cargan facturas de fecha anterior a este mes; una fecha leida antes
+// de esto casi siempre es un error de lectura (OCR) y se descarta.
+const FECHA_MINIMA_FACTURAS = "2026-07-01";
+
 const LOGO_PATH = path.join(__dirname, "..", "frontend", "icons", "logo-full.png");
 const LOGO_BUFFER = fs.existsSync(LOGO_PATH) ? fs.readFileSync(LOGO_PATH) : null;
 
@@ -96,7 +100,6 @@ async function leerFacturaConIA_(base64Image, mediaType, descripcion) {
   // haya logrado extraer (puede tener campos vacios) y marcamos para revision manual.
   return { extraido: ultimoExtraido, necesitaRevision: true };
 }
-
 app.post("/api/gastos", upload.single("foto"), async (req, res) => {
   try {
     requireAppsScriptUrl();
@@ -112,17 +115,30 @@ app.post("/api/gastos", upload.single("foto"), async (req, res) => {
 
     const { extraido, necesitaRevision } = await leerFacturaConIA_(base64Image, mediaType, descripcion);
 
-    const fecha = (extraido && extraido.fecha) || new Date().toISOString().slice(0, 10);
+    const fechaExtraida = (extraido && extraido.fecha) || "";
+    const hoyStr = new Date().toISOString().slice(0, 10);
+    let fecha = fechaExtraida || hoyStr;
+    let motivoRevision = "";
+    if (fechaExtraida && fechaExtraida < FECHA_MINIMA_FACTURAS) {
+      motivoRevision = `La fecha que leyó la IA en la factura (${fechaExtraida}) es anterior a julio de 2026, así que probablemente la lectura fue incorrecta. Verifica y completa la fecha manualmente.`;
+      fecha = "";
+    } else if (fechaExtraida && fechaExtraida > hoyStr) {
+      motivoRevision = `La fecha que leyó la IA en la factura (${fechaExtraida}) es posterior a hoy, así que probablemente la lectura fue incorrecta. Verifica y completa la fecha manualmente.`;
+      fecha = "";
+    }
+
     const comercio = (extraido && extraido.comercio) || "";
     const nit = (extraido && extraido.nit) || "";
     const valor = Number(extraido && extraido.valor) || 0;
     const categoria = extraido && CATEGORIAS.includes(extraido.categoria) ? extraido.categoria : "Otros";
     const detalleIA = (extraido && extraido.descripcion) || "";
     const descripcionFinal = [descripcion, detalleIA].filter(Boolean).join(" — ");
-    const estado = necesitaRevision ? "No se pudo leer - completar a mano" : "Pendiente revision";
+    const necesitaRevisionFinal = necesitaRevision || !!motivoRevision;
+    const estado = necesitaRevisionFinal ? "No se pudo leer - completar a mano" : "Pendiente revision";
 
     const extension = mediaType.includes("png") ? "png" : "jpg";
-    const fotoNombre = `${fecha}_${(comercio || "gasto").replace(/[^a-zA-Z0-9._-]+/g, "_")}.${extension}`;
+    const fechaParaArchivo = fecha || hoyStr;
+    const fotoNombre = `${fechaParaArchivo}_${(comercio || "gasto").replace(/[^a-zA-Z0-9._-]+/g, "_")}.${extension}`;
 
     const scriptRes = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
@@ -137,7 +153,7 @@ app.post("/api/gastos", upload.single("foto"), async (req, res) => {
       return res.status(502).json({ error: scriptData.error || "Error al guardar en Google Sheets" });
     }
 
-    res.json({ ...scriptData, necesitaRevision });
+    res.json({ ...scriptData, necesitaRevision: necesitaRevisionFinal, motivoRevision });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message || "Error inesperado" });
@@ -146,9 +162,11 @@ app.post("/api/gastos", upload.single("foto"), async (req, res) => {
 app.get("/api/gastos", async (req, res) => {
   try {
     requireAppsScriptUrl();
-    const { mes, anio } = req.query;
+    const { mes, anio, desde, hasta } = req.query;
     let url = APPS_SCRIPT_URL;
-    if (mes && anio) {
+    if (desde && hasta) {
+      url += `?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`;
+    } else if (mes && anio) {
       url += `?mes=${encodeURIComponent(mes)}&anio=${encodeURIComponent(anio)}`;
     }
     const scriptRes = await fetch(url);
@@ -319,6 +337,25 @@ app.put("/api/gastos/:id", async (req, res) => {
     const scriptData = await scriptRes.json();
     if (!scriptData.ok) {
       return res.status(502).json({ error: scriptData.error || "Error al editar el gasto" });
+    }
+    res.json(scriptData);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Error inesperado" });
+  }
+});
+
+app.delete("/api/gastos/:id", async (req, res) => {
+  try {
+    requireAppsScriptUrl();
+    const scriptRes = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accion: "eliminar", id: req.params.id }),
+    });
+    const scriptData = await scriptRes.json();
+    if (!scriptData.ok) {
+      return res.status(502).json({ error: scriptData.error || "Error al eliminar el gasto" });
     }
     res.json(scriptData);
   } catch (err) {
