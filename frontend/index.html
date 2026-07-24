@@ -18,6 +18,8 @@
     --text: #1B2430;
     --muted: #6B7686;
     --green: #2E7D32;
+    --orange: #C25E00;
+    --red: #C0392B;
     --border: #E3E7ED;
   }
   @media (prefers-color-scheme: dark) {
@@ -35,12 +37,14 @@
   body { padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
   header { position: sticky; top: 0; z-index: 5; background: var(--navy); color: #fff;
     padding: calc(14px + env(safe-area-inset-top)) 18px 14px; display: flex; align-items: center;
-    justify-content: space-between; }
-  header .brand { display: flex; align-items: center; gap: 10px; }
-  header .brand img { width: 34px; height: 34px; border-radius: 8px; background: #fff; }
+    justify-content: space-between; gap: 8px; }
+  header .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  header .brand img { width: 34px; height: 34px; border-radius: 8px; background: #fff; flex-shrink: 0; }
   header h1 { font-size: 17px; margin: 0; font-weight: 700; line-height: 1.15; }
+  header .right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
   header .total { font-size: 12px; opacity: 0.9; background: none; border: 1px solid rgba(255,255,255,0.4);
-    border-radius: 100px; color: #fff; padding: 6px 12px; font-family: inherit; text-align: right; }
+    border-radius: 100px; color: #fff; padding: 6px 12px; font-family: inherit; text-align: right; white-space: nowrap; }
+  header .icon-btn { background: none; border: none; color: #fff; font-size: 21px; padding: 4px 6px; }
   .mes-selectores { display: flex; gap: 10px; }
   .mes-selectores select { flex: 1; }
   main { padding: 14px; max-width: 560px; margin: 0 auto; }
@@ -52,11 +56,13 @@
   .gasto .comercio { font-weight: 700; font-size: 15px; }
   .gasto .meta { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
   .gasto .obra { font-size: 12px; color: var(--navy); font-weight: 600; margin-top: 2px; }
+  .gasto .caja { font-size: 12px; color: var(--orange); font-weight: 600; margin-top: 2px; }
   .gasto .desc { font-size: 12.5px; color: var(--muted); margin-top: 3px; font-style: italic; }
   .gasto .valor { font-weight: 700; font-size: 15px; white-space: nowrap; }
   .gasto .right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
   .badge { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 2px 8px;
     border-radius: 100px; background: var(--navy); color: #fff; opacity: 0.85; margin-top: 6px; }
+  .badge.alerta { background: var(--orange); }
   .links-row { margin-top: 6px; display: flex; gap: 14px; }
   .foto-link, .edit-link { font-size: 11.5px; font-weight: 600; color: var(--navy);
     text-decoration: none; background: none; border: none; padding: 0; font-family: inherit; }
@@ -77,10 +83,16 @@
   .field { margin-bottom: 14px; }
   .field label { display: block; font-size: 13px; font-weight: 600; color: var(--muted);
     margin-bottom: 6px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .aviso { background: rgba(194,94,0,0.12); border: 1px solid var(--orange); color: var(--orange);
+    border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 14px; }
   textarea, input[type="text"], input[type="number"], input[type="date"], select {
     width: 100%; border: 1px solid var(--border); border-radius: 10px;
     padding: 12px; font-size: 15px; background: var(--card); color: var(--text); font-family: inherit; }
   textarea { min-height: 70px; resize: vertical; }
+  .checkbox-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .checkbox-row input { width: auto; }
+  .checkbox-row span { font-size: 14px; font-weight: 600; }
   .photo-btn { display: flex; align-items: center; justify-content: center; gap: 8px;
     width: 100%; padding: 16px; border-radius: 12px; border: 2px dashed var(--border);
     background: var(--card); color: var(--navy); font-weight: 600; font-size: 15px; }
@@ -96,16 +108,27 @@
     border-top-color: var(--navy); border-radius: 50%; animation: spin 0.7s linear infinite;
     vertical-align: middle; margin-right: 6px; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  .trabajador-row { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+  .trabajador-row .nombre { font-weight: 700; font-size: 15px; }
+  .trabajador-row .caja-info { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .trabajador-row .caja-info.activa { color: var(--green); }
+  .trabajador-row .barra { height: 6px; border-radius: 100px; background: var(--border); margin-top: 8px; overflow: hidden; }
+  .trabajador-row .barra-fill { height: 100%; background: var(--navy); }
+  .trabajador-row .btn-mini { margin-top: 10px; width: 100%; padding: 10px; border: none;
+    border-radius: 10px; background: var(--navy); color: #fff; font-weight: 600; font-size: 13px; }
+  .trabajador-row .historial { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
 </style>
 </head>
 <body>
-
 <header>
   <div class="brand">
     <img src="icons/icon-180.png" alt="Logo JACBEL" />
     <h1>Gastos JACBEL</h1>
   </div>
-  <button type="button" class="total" id="btnMes">Cargando...</button>
+  <div class="right">
+    <button type="button" class="icon-btn" id="btnCajaMenor" aria-label="Caja menor">👛</button>
+    <button type="button" class="total" id="btnMes">Cargando...</button>
+  </div>
 </header>
 
 <main id="lista">
@@ -125,8 +148,19 @@
     </div>
     <div class="field">
       <label for="obra">Obra</label>
-      <input type="text" id="obra" name="obra" list="obras-list" placeholder="Nombre de la obra" />
-      <datalist id="obras-list"></datalist>
+      <select id="obra" name="obra">
+        <option value="">Selecciona una obra</option>
+      </select>
+    </div>
+    <div class="field">
+      <label class="checkbox-row" for="esCajaMenor">
+        <input type="checkbox" id="esCajaMenor" />
+        <span>💵 Este gasto se pagó con caja menor</span>
+      </label>
+      <div id="campoTrabajadorCaja" style="display:none; margin-top:10px;">
+        <select id="trabajadorCaja"></select>
+        <div class="hint">Solo aparecen los trabajadores que tienen una caja menor activa. Agrégalas desde el ícono 👛.</div>
+      </div>
     </div>
     <div class="field">
       <label>Foto de la factura</label>
@@ -159,18 +193,20 @@
 
 <div class="sheet" id="sheetEdit">
   <h2>Editar gasto</h2>
+  <div class="aviso" id="avisoEdit" style="display:none;">No pudimos leer todos los datos de esta factura automáticamente. Por favor completa o corrige los datos abajo.</div>
   <form id="formEdit">
     <div class="field">
       <label for="editFecha">Fecha</label>
       <input type="date" id="editFecha" name="fecha" />
     </div>
     <div class="field">
-      <label for="editComercio">Comercio</label>
-      <input type="text" id="editComercio" name="comercio" />
+      <label for="editComercio">Comercio / Razón social</label>
+      <input type="text" id="editComercio" name="comercio" placeholder="Nombre del proveedor" />
     </div>
     <div class="field">
       <label for="editNit">NIT</label>
       <input type="text" id="editNit" name="nit" placeholder="Ej: 900.123.456-7" />
+      <div class="hint">Déjalo en blanco si el proveedor no tiene NIT, no hay problema.</div>
     </div>
     <div class="field">
       <label for="editCategoria">Categoría</label>
@@ -182,7 +218,9 @@
     </div>
     <div class="field">
       <label for="editObra">Obra</label>
-      <input type="text" id="editObra" name="obra" list="obras-list" placeholder="Nombre de la obra" />
+      <select id="editObra" name="obra">
+        <option value="">Selecciona una obra</option>
+      </select>
     </div>
     <div class="field">
       <label for="editDescripcion">Descripción</label>
@@ -196,6 +234,44 @@
     <button type="button" class="btn-secondary" id="btnCancelarEdit">Cancelar</button>
     <div class="status" id="statusEdit"></div>
   </form>
+</div>
+
+<div class="sheet-overlay" id="overlayCaja"></div>
+
+<div class="sheet" id="sheetCaja">
+  <h2>Caja menor</h2>
+  <div class="field">
+    <label for="nuevoTrabajador">Agregar trabajador</label>
+    <div style="display:flex; gap:8px;">
+      <input type="text" id="nuevoTrabajador" placeholder="Nombre completo" style="flex:1" />
+      <button type="button" class="btn-primary" id="btnAgregarTrabajador" style="width:auto; padding:12px 16px; margin-top:0;">Agregar</button>
+    </div>
+    <div class="status" id="statusTrabajador"></div>
+  </div>
+  <div id="listaTrabajadores"></div>
+  <button type="button" class="btn-secondary" id="btnCerrarCaja">Cerrar</button>
+</div>
+
+<div class="sheet-overlay" id="overlayNuevaCaja"></div>
+
+<div class="sheet" id="sheetNuevaCaja">
+  <h2>Nueva caja menor</h2>
+  <div class="field">
+    <label>Trabajador</label>
+    <input type="text" id="nuevaCajaTrabajadorTexto" disabled />
+  </div>
+  <div class="field">
+    <label for="nuevaCajaValor">Valor entregado (COP)</label>
+    <input type="number" id="nuevaCajaValor" min="0" step="1" placeholder="Ej: 1000000" />
+  </div>
+  <div class="field">
+    <label for="nuevaCajaFecha">Fecha de entrega</label>
+    <input type="date" id="nuevaCajaFecha" />
+  </div>
+  <div class="hint" id="avisoCajaActiva" style="display:none; margin-bottom:10px;">Este trabajador ya tiene una caja menor activa; al guardar, esa caja se cierra y esta nueva pasa a ser la activa.</div>
+  <button type="button" class="btn-primary" id="btnGuardarNuevaCaja">Guardar</button>
+  <button type="button" class="btn-secondary" id="btnCancelarNuevaCaja">Cancelar</button>
+  <div class="status" id="statusNuevaCaja"></div>
 </div>
 
 <script>
@@ -212,6 +288,10 @@ const preview = document.getElementById("preview");
 const form = document.getElementById("form");
 const status = document.getElementById("status");
 const btnGuardar = document.getElementById("btnGuardar");
+const obraSelect = document.getElementById("obra");
+const esCajaMenorCheckbox = document.getElementById("esCajaMenor");
+const campoTrabajadorCaja = document.getElementById("campoTrabajadorCaja");
+const trabajadorCajaSelect = document.getElementById("trabajadorCaja");
 
 const overlayMes = document.getElementById("overlayMes");
 const sheetMes = document.getElementById("sheetMes");
@@ -220,22 +300,46 @@ const btnCancelarMes = document.getElementById("btnCancelarMes");
 const btnVerMes = document.getElementById("btnVerMes");
 const selectMes = document.getElementById("selectMes");
 const selectAnio = document.getElementById("selectAnio");
-
 const overlayEdit = document.getElementById("overlayEdit");
 const sheetEdit = document.getElementById("sheetEdit");
 const formEdit = document.getElementById("formEdit");
 const statusEdit = document.getElementById("statusEdit");
 const btnCancelarEdit = document.getElementById("btnCancelarEdit");
 const editCategoriaSelect = document.getElementById("editCategoria");
+const editObraSelect = document.getElementById("editObra");
+const avisoEdit = document.getElementById("avisoEdit");
+
+const overlayCaja = document.getElementById("overlayCaja");
+const sheetCaja = document.getElementById("sheetCaja");
+const btnCajaMenor = document.getElementById("btnCajaMenor");
+const btnCerrarCaja = document.getElementById("btnCerrarCaja");
+const nuevoTrabajadorInput = document.getElementById("nuevoTrabajador");
+const btnAgregarTrabajador = document.getElementById("btnAgregarTrabajador");
+const statusTrabajador = document.getElementById("statusTrabajador");
+const listaTrabajadores = document.getElementById("listaTrabajadores");
+
+const overlayNuevaCaja = document.getElementById("overlayNuevaCaja");
+const sheetNuevaCaja = document.getElementById("sheetNuevaCaja");
+const nuevaCajaTrabajadorTexto = document.getElementById("nuevaCajaTrabajadorTexto");
+const nuevaCajaValor = document.getElementById("nuevaCajaValor");
+const nuevaCajaFecha = document.getElementById("nuevaCajaFecha");
+const avisoCajaActiva = document.getElementById("avisoCajaActiva");
+const btnGuardarNuevaCaja = document.getElementById("btnGuardarNuevaCaja");
+const btnCancelarNuevaCaja = document.getElementById("btnCancelarNuevaCaja");
+const statusNuevaCaja = document.getElementById("statusNuevaCaja");
 
 editCategoriaSelect.innerHTML = CATEGORIAS.map((c) => `<option value="${c}">${c}</option>`).join("");
-
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
   "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
 const hoy = new Date();
 let mesActual = hoy.getMonth() + 1;
 let anioActual = hoy.getFullYear();
+
+function hoyLocal_() {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${hoy.getFullYear()}-${pad(hoy.getMonth() + 1)}-${pad(hoy.getDate())}`;
+}
 
 selectMes.innerHTML = MESES.map((m, i) => `<option value="${i + 1}">${m}</option>`).join("");
 const anios = [];
@@ -261,8 +365,9 @@ btnVerMes.addEventListener("click", () => {
   cerrarSheetMes();
   cargarGastos();
 });
-
 function abrirSheet() {
+  esCajaMenorCheckbox.checked = false;
+  campoTrabajadorCaja.style.display = "none";
   overlay.classList.add("open");
   sheet.classList.add("open");
 }
@@ -271,16 +376,22 @@ function cerrarSheet() {
   sheet.classList.remove("open");
   form.reset();
   preview.style.display = "none";
+  campoTrabajadorCaja.style.display = "none";
   status.textContent = "";
 }
 btnAbrir.addEventListener("click", abrirSheet);
 btnCancelar.addEventListener("click", cerrarSheet);
 overlay.addEventListener("click", cerrarSheet);
 
+esCajaMenorCheckbox.addEventListener("change", () => {
+  campoTrabajadorCaja.style.display = esCajaMenorCheckbox.checked ? "block" : "none";
+});
+
 function cerrarSheetEdit() {
   overlayEdit.classList.remove("open");
   sheetEdit.classList.remove("open");
   statusEdit.textContent = "";
+  avisoEdit.style.display = "none";
 }
 btnCancelarEdit.addEventListener("click", cerrarSheetEdit);
 overlayEdit.addEventListener("click", cerrarSheetEdit);
@@ -299,8 +410,45 @@ fotoInput.addEventListener("change", () => {
 const fmt = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
 
 let gastosActuales = [];
+let trabajadoresActuales = [];
+// ---------- Selector de obra (seleccionar o agregar nueva) ----------
 
-function abrirEdicion(id) {
+let obrasActuales = [];
+
+function poblarSelectObra_(select, valorPreseleccionado) {
+  const actual = valorPreseleccionado !== undefined ? valorPreseleccionado : select.value;
+  select.innerHTML = '<option value="">Selecciona una obra</option>'
+    + obrasActuales.map((o) => `<option value="${o}">${o}</option>`).join("")
+    + '<option value="__nueva__">+ Agregar nueva obra...</option>';
+  select.value = actual;
+}
+
+function manejarCambioObra_(select) {
+  if (select.value !== "__nueva__") return;
+  const nombre = prompt("Nombre de la nueva obra:");
+  if (!nombre || !nombre.trim()) { select.value = ""; return; }
+  const limpio = nombre.trim();
+  if (!obrasActuales.includes(limpio)) obrasActuales.push(limpio);
+  poblarSelectObra_(obraSelect, obraSelect === select ? limpio : undefined);
+  poblarSelectObra_(editObraSelect, editObraSelect === select ? limpio : undefined);
+}
+obraSelect.addEventListener("change", () => manejarCambioObra_(obraSelect));
+editObraSelect.addEventListener("change", () => manejarCambioObra_(editObraSelect));
+
+async function cargarObras() {
+  try {
+    const res = await fetch(API_BASE + "/api/obras");
+    const data = await res.json();
+    obrasActuales = Array.isArray(data) ? data : [];
+    poblarSelectObra_(obraSelect);
+    poblarSelectObra_(editObraSelect);
+  } catch (e) {
+    // sin conexion: los selects quedan solo con la opcion de agregar nueva
+  }
+}
+// ---------- Caja menor ----------
+
+function abrirEdicion(id, opts) {
   const g = gastosActuales.find((x) => x.id === id);
   if (!g) return;
   document.getElementById("editFecha").value = (g.fecha || "").slice(0, 10);
@@ -308,15 +456,15 @@ function abrirEdicion(id) {
   document.getElementById("editNit").value = g.nit || "";
   document.getElementById("editCategoria").value = CATEGORIAS.includes(g.categoria) ? g.categoria : "Otros";
   document.getElementById("editValor").value = g.valor || 0;
-  document.getElementById("editObra").value = g.obra || "";
+  poblarSelectObra_(editObraSelect, g.obra || "");
   document.getElementById("editDescripcion").value = g.descripcion || "";
   document.getElementById("editNotas").value = g.notas || "";
   formEdit.dataset.id = id;
+  avisoEdit.style.display = (opts && opts.necesitaRevision) ? "block" : "none";
   overlayEdit.classList.add("open");
   sheetEdit.classList.add("open");
 }
 window.abrirEdicion = abrirEdicion;
-
 function renderLista(gastos) {
   gastosActuales = gastos;
   const main = document.getElementById("lista");
@@ -331,24 +479,26 @@ function renderLista(gastos) {
     return;
   }
 
-  main.innerHTML = gastos.map((g) => `
+  main.innerHTML = gastos.map((g) => {
+    const necesitaRevision = g.estado === "No se pudo leer - completar a mano";
+    return `
     <div class="card gasto">
       <div class="left">
         <div class="comercio">${g.comercio || "Sin nombre"}</div>
         <div class="meta">${(g.fecha || "").slice(0, 10)} · ${g.categoria || "Otros"}${g.nit ? ` · NIT ${g.nit}` : ""}</div>
         ${g.obra ? `<div class="obra">🏗️ ${g.obra}</div>` : ""}
+        ${g.trabajador ? `<div class="caja">👛 ${g.trabajador} (caja menor)</div>` : ""}
         ${g.descripcion ? `<div class="desc">"${g.descripcion}"</div>` : ""}
-        <span class="badge">${g.estado || "Registrado"}</span>
+        <span class="badge ${necesitaRevision ? "alerta" : ""}">${g.estado || "Registrado"}</span>
         <div class="links-row">
           ${g.fotoUrl ? `<a class="foto-link" href="${g.fotoUrl}" target="_blank" rel="noopener">📎 Ver factura</a>` : ""}
           ${g.id ? `<button type="button" class="edit-link" onclick="abrirEdicion('${g.id}')">✏️ Editar</button>` : ""}
         </div>
       </div>
       <div class="valor">${fmt.format(g.valor || 0)}</div>
-    </div>
-  `).join("");
+    </div>`;
+  }).join("");
 }
-
 async function cargarGastos() {
   try {
     btnMes.textContent = "Cargando...";
@@ -360,24 +510,22 @@ async function cargarGastos() {
   }
 }
 
-async function cargarObras() {
-  try {
-    const res = await fetch(API_BASE + "/api/obras");
-    const data = await res.json();
-    document.getElementById("obras-list").innerHTML = data.map((o) => `<option value="${o}"></option>`).join("");
-  } catch (e) {
-    // sin conexion, se ignora: el campo de obra sigue funcionando como texto libre
-  }
-}
-
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const descripcion = document.getElementById("descripcion").value.trim();
-  const obra = document.getElementById("obra").value.trim();
+  const obra = obraSelect.value === "__nueva__" ? "" : obraSelect.value;
   const file = fotoInput.files[0];
   if (!file) {
     status.textContent = "Adjunta la foto de la factura.";
     return;
+  }
+  let trabajador = "";
+  if (esCajaMenorCheckbox.checked) {
+    trabajador = trabajadorCajaSelect.value;
+    if (!trabajador) {
+      status.textContent = "Selecciona el trabajador de la caja menor, o desmarca la casilla.";
+      return;
+    }
   }
   btnGuardar.disabled = true;
   status.innerHTML = '<span class="spinner"></span> Leyendo la factura con IA...';
@@ -385,21 +533,25 @@ form.addEventListener("submit", async (e) => {
   const fd = new FormData();
   fd.append("descripcion", descripcion);
   fd.append("obra", obra);
+  fd.append("trabajador", trabajador);
   fd.append("foto", file);
-
   try {
     const res = await fetch(API_BASE + "/api/gastos", { method: "POST", body: fd });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Error al guardar");
-    status.textContent = "Gasto guardado ✓";
-    setTimeout(() => { cerrarSheet(); cargarGastos(); cargarObras(); }, 700);
+    cerrarSheet();
+    await cargarGastos();
+    await cargarObras();
+    await cargarTrabajadores();
+    if (data.necesitaRevision && data.id) {
+      abrirEdicion(data.id, { necesitaRevision: true });
+    }
   } catch (err) {
     status.textContent = "Error: " + err.message;
   } finally {
     btnGuardar.disabled = false;
   }
 });
-
 formEdit.addEventListener("submit", async (e) => {
   e.preventDefault();
   const id = formEdit.dataset.id;
@@ -409,7 +561,7 @@ formEdit.addEventListener("submit", async (e) => {
     nit: document.getElementById("editNit").value.trim(),
     categoria: document.getElementById("editCategoria").value,
     valor: Number(document.getElementById("editValor").value) || 0,
-    obra: document.getElementById("editObra").value.trim(),
+    obra: editObraSelect.value === "__nueva__" ? "" : editObraSelect.value,
     descripcion: document.getElementById("editDescripcion").value.trim(),
     notas: document.getElementById("editNotas").value.trim(),
   };
@@ -428,6 +580,116 @@ formEdit.addEventListener("submit", async (e) => {
     statusEdit.textContent = "Error: " + err.message;
   }
 });
+// ---------- Caja menor: administracion ----------
+
+function abrirSheetCaja() {
+  nuevoTrabajadorInput.value = "";
+  statusTrabajador.textContent = "";
+  overlayCaja.classList.add("open");
+  sheetCaja.classList.add("open");
+  cargarTrabajadores();
+}
+function cerrarSheetCaja() {
+  overlayCaja.classList.remove("open");
+  sheetCaja.classList.remove("open");
+}
+btnCajaMenor.addEventListener("click", abrirSheetCaja);
+btnCerrarCaja.addEventListener("click", cerrarSheetCaja);
+overlayCaja.addEventListener("click", cerrarSheetCaja);
+function renderTrabajadores_() {
+  if (!trabajadoresActuales.length) {
+    listaTrabajadores.innerHTML = '<div class="hint">Todavía no has agregado trabajadores.</div>';
+    return;
+  }
+  listaTrabajadores.innerHTML = trabajadoresActuales.map((t) => {
+    const c = t.cajaActiva;
+    let infoHtml;
+    let barraHtml = "";
+    if (c) {
+      const pct = c.valorEntregado > 0 ? Math.min(100, Math.round((c.consumido / c.valorEntregado) * 100)) : 0;
+      infoHtml = `<div class="caja-info activa">${fmt.format(c.valorEntregado)} entregado el ${(c.fecha || "").slice(0, 10)} · consumido ${fmt.format(c.consumido)} · resta ${fmt.format(c.restante)}</div>`;
+      barraHtml = `<div class="barra"><div class="barra-fill" style="width:${pct}%"></div></div>`;
+    } else {
+      infoHtml = `<div class="caja-info">Sin caja menor activa</div>`;
+    }
+    const historialCerrado = (t.historial || []).filter((h) => !h.activa);
+    const historialHtml = historialCerrado.length
+async function cargarTrabajadores() {
+  try {
+    const res = await fetch(API_BASE + "/api/trabajadores");
+    const data = await res.json();
+    trabajadoresActuales = Array.isArray(data) ? data : [];
+    renderTrabajadores_();
+    const conCaja = trabajadoresActuales.filter((t) => t.cajaActiva);
+    trabajadorCajaSelect.innerHTML = conCaja.length
+      ? conCaja.map((t) => `<option value="${t.nombre}">${t.nombre} (resta ${fmt.format(t.cajaActiva.restante)})</option>`).join("")
+      : '<option value="">No hay trabajadores con caja activa</option>';
+  } catch (e) {
+    // sin conexion, se ignora
+  }
+}
+
+btnAgregarTrabajador.addEventListener("click", async () => {
+  const nombre = nuevoTrabajadorInput.value.trim();
+  if (!nombre) { statusTrabajador.textContent = "Escribe el nombre del trabajador."; return; }
+  statusTrabajador.innerHTML = '<span class="spinner"></span> Guardando...';
+  try {
+    const res = await fetch(API_BASE + "/api/trabajadores", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Error al agregar");
+    nuevoTrabajadorInput.value = "";
+    statusTrabajador.textContent = "Trabajador agregado ✓";
+    cargarTrabajadores();
+  } catch (err) {
+    statusTrabajador.textContent = "Error: " + err.message;
+  }
+});
+
+function abrirNuevaCaja(nombre, tieneCajaActiva) {
+  nuevaCajaTrabajadorTexto.value = nombre;
+  nuevaCajaValor.value = "";
+  nuevaCajaFecha.value = hoyLocal_();
+  avisoCajaActiva.style.display = tieneCajaActiva === "true" || tieneCajaActiva === true ? "block" : "none";
+  statusNuevaCaja.textContent = "";
+  sheetNuevaCaja.dataset.trabajador = nombre;
+  overlayNuevaCaja.classList.add("open");
+  sheetNuevaCaja.classList.add("open");
+}
+window.abrirNuevaCaja = abrirNuevaCaja;
+
+function cerrarSheetNuevaCaja() {
+  overlayNuevaCaja.classList.remove("open");
+  sheetNuevaCaja.classList.remove("open");
+}
+btnCancelarNuevaCaja.addEventListener("click", cerrarSheetNuevaCaja);
+overlayNuevaCaja.addEventListener("click", cerrarSheetNuevaCaja);
+
+btnGuardarNuevaCaja.addEventListener("click", async () => {
+  const trabajador = sheetNuevaCaja.dataset.trabajador;
+  const valor = Number(nuevaCajaValor.value) || 0;
+  const fecha = nuevaCajaFecha.value;
+  if (!valor || valor <= 0) { statusNuevaCaja.textContent = "Escribe un valor mayor a 0."; return; }
+  if (!fecha) { statusNuevaCaja.textContent = "Escribe la fecha de entrega."; return; }
+  statusNuevaCaja.innerHTML = '<span class="spinner"></span> Guardando...';
+  try {
+    const res = await fetch(API_BASE + "/api/caja-menor", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trabajador, valor, fecha }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Error al guardar la caja menor");
+    statusNuevaCaja.textContent = "Caja menor registrada ✓";
+    await cargarTrabajadores();
+    setTimeout(cerrarSheetNuevaCaja, 700);
+  } catch (err) {
+    statusNuevaCaja.textContent = "Error: " + err.message;
+  }
+});
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
@@ -435,6 +697,21 @@ if ("serviceWorker" in navigator) {
 
 cargarGastos();
 cargarObras();
+cargarTrabajadores();
 </script>
 </body>
 </html>
+
+      ? `<div class="historial">Historial: ${historialCerrado.map((h) => `${(h.fecha || "").slice(0, 10)} — ${fmt.format(h.valorEntregado)} (gastado ${fmt.format(h.consumido)})`).join(" · ")}</div>`
+      : "";
+    const nombreEscapado = t.nombre.replace(/'/g, "\\'");
+    return `
+    <div class="trabajador-row">
+      <div class="nombre">${t.nombre}</div>
+      ${infoHtml}
+      ${barraHtml}
+      ${historialHtml}
+      <button type="button" class="btn-mini" onclick="abrirNuevaCaja('${nombreEscapado}', ${c ? "true" : "false"})">💵 ${c ? "Dar nueva caja menor" : "Dar caja menor"}</button>
+    </div>`;
+  }).join("");
+}
