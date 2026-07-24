@@ -117,6 +117,19 @@
   .trabajador-row .btn-mini { margin-top: 10px; width: 100%; padding: 10px; border: none;
     border-radius: 10px; background: var(--navy); color: #fff; font-weight: 600; font-size: 13px; }
   .trabajador-row .historial { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+  .trabajador-row .nombre-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .trabajador-row .pdf-btn { background: none; border: none; font-size: 19px; padding: 2px 4px; color: var(--navy); flex-shrink: 0; }
+  .pdf-preview { position: fixed; inset: 0; background: var(--bg); z-index: 50; display: none;
+    flex-direction: column; }
+  .pdf-preview.open { display: flex; }
+  .pdf-preview-header { display: flex; align-items: center; justify-content: space-between;
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px; background: var(--navy); color: #fff;
+    font-weight: 700; font-size: 15px; }
+  .pdf-preview-cerrar { background: none; border: none; color: #fff; font-size: 18px; padding: 4px 8px; }
+  .pdf-preview-frame { flex: 1; width: 100%; border: none; background: #525659; }
+  .pdf-preview-acciones { display: flex; gap: 10px; padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
+    background: var(--card); border-top: 1px solid var(--border); }
+  .pdf-preview-acciones .btn-primary, .pdf-preview-acciones .btn-secondary { margin-top: 0; }
 </style>
 </head>
 <body>
@@ -278,9 +291,22 @@
     <input type="date" id="nuevaCajaFecha" />
   </div>
   <div class="hint" id="avisoCajaActiva" style="display:none; margin-bottom:10px;">Este trabajador ya tiene una caja menor activa; al guardar, esa caja se cierra y esta nueva pasa a ser la activa.</div>
+  <div class="aviso" id="avisoDeuda" style="display:none;"></div>
   <button type="button" class="btn-primary" id="btnGuardarNuevaCaja">Guardar</button>
   <button type="button" class="btn-secondary" id="btnCancelarNuevaCaja">Cancelar</button>
   <div class="status" id="statusNuevaCaja"></div>
+</div>
+
+<div class="pdf-preview" id="pdfPreview">
+  <div class="pdf-preview-header">
+    <span>Vista previa</span>
+    <button type="button" class="pdf-preview-cerrar" id="btnCerrarPreview">✕</button>
+  </div>
+  <iframe id="pdfPreviewFrame" class="pdf-preview-frame"></iframe>
+  <div class="pdf-preview-acciones">
+    <button type="button" class="btn-secondary" id="btnDescargarPreview">Descargar</button>
+    <button type="button" class="btn-primary" id="btnCompartirPreview">Compartir</button>
+  </div>
 </div>
 
 <script>
@@ -309,7 +335,6 @@ const btnCancelarMes = document.getElementById("btnCancelarMes");
 const btnVerMes = document.getElementById("btnVerMes");
 const selectMes = document.getElementById("selectMes");
 const selectAnio = document.getElementById("selectAnio");
-
 const overlayEdit = document.getElementById("overlayEdit");
 const sheetEdit = document.getElementById("sheetEdit");
 const formEdit = document.getElementById("formEdit");
@@ -337,9 +362,17 @@ const nuevaCajaTrabajadorTexto = document.getElementById("nuevaCajaTrabajadorTex
 const nuevaCajaValor = document.getElementById("nuevaCajaValor");
 const nuevaCajaFecha = document.getElementById("nuevaCajaFecha");
 const avisoCajaActiva = document.getElementById("avisoCajaActiva");
+const avisoDeuda = document.getElementById("avisoDeuda");
 const btnGuardarNuevaCaja = document.getElementById("btnGuardarNuevaCaja");
 const btnCancelarNuevaCaja = document.getElementById("btnCancelarNuevaCaja");
 const statusNuevaCaja = document.getElementById("statusNuevaCaja");
+
+const pdfPreview = document.getElementById("pdfPreview");
+const pdfPreviewFrame = document.getElementById("pdfPreviewFrame");
+const btnCerrarPreview = document.getElementById("btnCerrarPreview");
+const btnDescargarPreview = document.getElementById("btnDescargarPreview");
+const btnCompartirPreview = document.getElementById("btnCompartirPreview");
+let pdfPreviewActual = null; // { blob, nombreArchivo, blobUrl }
 
 editCategoriaSelect.innerHTML = CATEGORIAS.map((c) => `<option value="${c}">${c}</option>`).join("");
 
@@ -431,7 +464,6 @@ const fmt = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP",
 
 let gastosActuales = [];
 let trabajadoresActuales = [];
-
 // ---------- Selector de obra (seleccionar o agregar nueva) ----------
 
 let obrasActuales = [];
@@ -467,6 +499,7 @@ async function cargarObras() {
     // sin conexion: los selects quedan solo con la opcion de agregar nueva
   }
 }
+
 // ---------- Caja menor ----------
 
 function abrirEdicion(id, opts) {
@@ -490,7 +523,6 @@ function abrirEdicion(id, opts) {
   sheetEdit.classList.add("open");
 }
 window.abrirEdicion = abrirEdicion;
-
 function renderLista(gastos) {
   gastosActuales = gastos;
   const main = document.getElementById("lista");
@@ -644,8 +676,10 @@ function renderTrabajadores_() {
     let infoHtml;
     let barraHtml = "";
     if (c) {
-      const pct = c.valorEntregado > 0 ? Math.min(100, Math.round((c.consumido / c.valorEntregado) * 100)) : 0;
-      infoHtml = `<div class="caja-info activa">${fmt.format(c.valorEntregado)} entregado el ${(c.fecha || "").slice(0, 10)} · consumido ${fmt.format(c.consumido)} · resta ${fmt.format(c.restante)}</div>`;
+      const pct = c.valorEntregado > 0 ? Math.min(100, Math.round(((c.deudaArrastrada + c.consumido) / c.valorEntregado) * 100)) : 0;
+      const deudaTexto = c.deudaArrastrada ? ` (incluye deuda anterior de ${fmt.format(c.deudaArrastrada)})` : "";
+      const saldoTexto = c.restante < 0 ? `debe ${fmt.format(-c.restante)}` : `resta ${fmt.format(c.restante)}`;
+      infoHtml = `<div class="caja-info activa">${fmt.format(c.valorEntregado)} entregado el ${(c.fecha || "").slice(0, 10)}${deudaTexto} · consumido ${fmt.format(c.consumido)} · ${saldoTexto}</div>`;
       barraHtml = `<div class="barra"><div class="barra-fill" style="width:${pct}%"></div></div>`;
     } else {
       infoHtml = `<div class="caja-info">Sin caja menor activa</div>`;
@@ -655,17 +689,20 @@ function renderTrabajadores_() {
       ? `<div class="historial">Historial: ${historialCerrado.map((h) => `${(h.fecha || "").slice(0, 10)} — ${fmt.format(h.valorEntregado)} (gastado ${fmt.format(h.consumido)})`).join(" · ")}</div>`
       : "";
     const nombreEscapado = t.nombre.replace(/'/g, "\\'");
+    const pdfBtnHtml = c ? `<button type="button" class="pdf-btn" onclick="abrirReporteCaja('${nombreEscapado}', '${c.id}')" aria-label="Generar reporte PDF">📄</button>` : "";
     return `
     <div class="trabajador-row">
-      <div class="nombre">${t.nombre}</div>
+      <div class="nombre-row">
+        <div class="nombre">${t.nombre}</div>
+        ${pdfBtnHtml}
+      </div>
       ${infoHtml}
       ${barraHtml}
       ${historialHtml}
-      <button type="button" class="btn-mini" onclick="abrirNuevaCaja('${nombreEscapado}', ${c ? "true" : "false"})">💵 ${c ? "Dar nueva caja menor" : "Dar caja menor"}</button>
+      <button type="button" class="btn-mini" onclick="abrirNuevaCaja('${nombreEscapado}')">💵 ${c ? "Dar nueva caja menor" : "Dar caja menor"}</button>
     </div>`;
   }).join("");
 }
-
 async function cargarTrabajadores() {
   try {
     const res = await fetch(API_BASE + "/api/trabajadores");
@@ -684,6 +721,7 @@ async function cargarTrabajadores() {
     // sin conexion, se ignora
   }
 }
+
 btnAgregarTrabajador.addEventListener("click", async () => {
   const nombre = nuevoTrabajadorInput.value.trim();
   if (!nombre) { statusTrabajador.textContent = "Escribe el nombre del trabajador."; return; }
@@ -703,12 +741,19 @@ btnAgregarTrabajador.addEventListener("click", async () => {
     statusTrabajador.textContent = "Error: " + err.message;
   }
 });
-
-function abrirNuevaCaja(nombre, tieneCajaActiva) {
+function abrirNuevaCaja(nombre) {
+  const t = trabajadoresActuales.find((x) => x.nombre === nombre);
+  const c = t && t.cajaActiva;
   nuevaCajaTrabajadorTexto.value = nombre;
   nuevaCajaValor.value = "";
   nuevaCajaFecha.value = hoyLocal_();
-  avisoCajaActiva.style.display = tieneCajaActiva === "true" || tieneCajaActiva === true ? "block" : "none";
+  avisoCajaActiva.style.display = c ? "block" : "none";
+  if (c && c.restante < 0) {
+    avisoDeuda.style.display = "block";
+    avisoDeuda.textContent = `Este trabajador debe ${fmt.format(-c.restante)} de la caja anterior. Ese valor se descontará automáticamente del saldo de la nueva caja menor.`;
+  } else {
+    avisoDeuda.style.display = "none";
+  }
   statusNuevaCaja.textContent = "";
   sheetNuevaCaja.dataset.trabajador = nombre;
   overlayNuevaCaja.classList.add("open");
@@ -745,6 +790,76 @@ btnGuardarNuevaCaja.addEventListener("click", async () => {
     statusNuevaCaja.textContent = "Error: " + err.message;
   }
 });
+// ---------- Reporte PDF de caja menor ----------
+
+async function compartirOGuardarPDF_(blob, nombreArchivo, tituloCompartir) {
+  const file = new File([blob], nombreArchivo, { type: "application/pdf" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: tituloCompartir });
+    } else {
+      throw new Error("share-no-soportado");
+    }
+  } catch (shareErr) {
+    if (shareErr && shareErr.name === "AbortError") {
+      // el usuario cerro el menu de compartir, no hacer nada mas
+    } else {
+      descargarPDF_(blob, nombreArchivo);
+    }
+  }
+}
+
+function descargarPDF_(blob, nombreArchivo) {
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+}
+
+function abrirPdfPreview_(blob, nombreArchivo) {
+  const blobUrl = URL.createObjectURL(blob);
+  pdfPreviewActual = { blob, nombreArchivo, blobUrl };
+  pdfPreviewFrame.src = blobUrl;
+  pdfPreview.classList.add("open");
+}
+function cerrarPdfPreview_() {
+  pdfPreview.classList.remove("open");
+  pdfPreviewFrame.src = "about:blank";
+  if (pdfPreviewActual) {
+    URL.revokeObjectURL(pdfPreviewActual.blobUrl);
+    pdfPreviewActual = null;
+  }
+}
+btnCerrarPreview.addEventListener("click", cerrarPdfPreview_);
+btnDescargarPreview.addEventListener("click", () => {
+  if (!pdfPreviewActual) return;
+  descargarPDF_(pdfPreviewActual.blob, pdfPreviewActual.nombreArchivo);
+});
+btnCompartirPreview.addEventListener("click", async () => {
+  if (!pdfPreviewActual) return;
+  await compartirOGuardarPDF_(pdfPreviewActual.blob, pdfPreviewActual.nombreArchivo, "Reporte de caja menor");
+});
+
+async function abrirReporteCaja(nombre, cajaId) {
+  statusTrabajador.innerHTML = '<span class="spinner"></span> Generando reporte...';
+  try {
+    const res = await fetch(`${API_BASE}/api/caja-menor/${cajaId}/pdf`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "No se pudo generar el reporte");
+    }
+    const blob = await res.blob();
+    statusTrabajador.textContent = "";
+    abrirPdfPreview_(blob, `caja-menor-${nombre.replace(/[^a-zA-Z0-9._-]+/g, "_")}.pdf`);
+  } catch (err) {
+    statusTrabajador.textContent = "Error: " + err.message;
+  }
+}
+window.abrirReporteCaja = abrirReporteCaja;
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
