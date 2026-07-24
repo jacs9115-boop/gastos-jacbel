@@ -22,6 +22,7 @@ function doPost(e) {
     return jsonOutput_({ ok: false, error: String(err) });
   }
 }
+
 function crearGasto_(body) {
   var fecha = body.fecha;
   var descripcion = body.descripcion || "";
@@ -63,6 +64,7 @@ function crearGasto_(body) {
     estado: estado, trabajador: trabajador,
   });
 }
+
 function editarGasto_(body) {
   var sheet = hojaGastos_();
   var lastRow = sheet.getLastRow();
@@ -84,6 +86,15 @@ function editarGasto_(body) {
   sheet.getRange(rowIndex, 7).setValue(body.notas || "");
   sheet.getRange(rowIndex, 11).setValue(body.obra || "");
   sheet.getRange(rowIndex, 13).setValue(body.nit || "");
+
+  var trabajador = body.trabajador || "";
+  var cajaMenorId = "";
+  if (trabajador) {
+    var caja = cajaActivaDeTrabajador_(trabajador);
+    if (caja) cajaMenorId = caja.id;
+  }
+  sheet.getRange(rowIndex, 14).setValue(trabajador);
+  sheet.getRange(rowIndex, 15).setValue(cajaMenorId);
 
   return jsonOutput_({ ok: true, id: body.id });
 }
@@ -112,6 +123,7 @@ function doGet(e) {
     return jsonOutput_({ error: String(err) });
   }
 }
+
 function obtenerGastosPorMes_(mes, anio) {
   var sheet = hojaGastos_();
   var lastRow = sheet.getLastRow();
@@ -182,6 +194,7 @@ function crearTrabajador_(body) {
   sheet.appendRow([nombre, true]);
   return jsonOutput_({ ok: true });
 }
+
 function crearCajaMenor_(body) {
   var trabajador = (body.trabajador || "").trim();
   var fecha = body.fecha || "";
@@ -206,6 +219,7 @@ function crearCajaMenor_(body) {
   sheet.appendRow([id, trabajador, fecha, valor, true]);
   return jsonOutput_({ ok: true, id: id });
 }
+
 function cajaActivaDeTrabajador_(trabajador) {
   var sheet = hojaCajasMenores_();
   var lastRow = sheet.getLastRow();
@@ -264,6 +278,7 @@ function obtenerTrabajadoresConCajas_() {
     return { nombre: nombre, cajaActiva: cajaActiva, historial: cajasDelTrabajador };
   });
 }
+
 // ---------- Utilidades de hojas ----------
 
 function hojaGastos_() {
