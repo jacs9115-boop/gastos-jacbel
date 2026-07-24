@@ -103,6 +103,9 @@
   .btn-primary:disabled { opacity: 0.5; }
   .btn-secondary { width: 100%; padding: 13px; border: none; border-radius: 12px;
     background: transparent; color: var(--muted); font-weight: 600; font-size: 14px; margin-top: 8px; }
+  .btn-eliminar { width: 100%; padding: 13px; border: none; border-radius: 12px;
+    background: transparent; color: var(--red); font-weight: 600; font-size: 14px; margin-top: 8px; }
+  .separador-o { text-align: center; color: var(--muted); font-size: 12px; margin: 16px 0; }
   .status { text-align: center; font-size: 14px; color: var(--muted); margin-top: 10px; min-height: 20px; }
   .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border);
     border-top-color: var(--navy); border-radius: 50%; animation: spin 0.7s linear infinite;
@@ -190,7 +193,7 @@
 <div class="sheet-overlay" id="overlayMes"></div>
 
 <div class="sheet" id="sheetMes">
-  <h2>Ver gastos de otro mes</h2>
+  <h2>Ver gastos de otro periodo</h2>
   <div class="field">
     <label for="selectMes">Mes y año</label>
     <div class="mes-selectores">
@@ -198,10 +201,20 @@
       <select id="selectAnio"></select>
     </div>
   </div>
-  <button type="button" class="btn-primary" id="btnVerMes">Ver resumen</button>
+  <button type="button" class="btn-primary" id="btnVerMes">Ver mes</button>
+  <div class="separador-o">— o elige un rango de fechas —</div>
+  <div class="field">
+    <label for="rangoDesde">Desde</label>
+    <input type="date" id="rangoDesde" />
+  </div>
+  <div class="field">
+    <label for="rangoHasta">Hasta</label>
+    <input type="date" id="rangoHasta" />
+  </div>
+  <button type="button" class="btn-primary" id="btnVerRango">Ver rango de fechas</button>
+  <div class="status" id="statusMes"></div>
   <button type="button" class="btn-secondary" id="btnCancelarMes">Cancelar</button>
 </div>
-
 <div class="sheet-overlay" id="overlayEdit"></div>
 
 <div class="sheet" id="sheetEdit">
@@ -251,6 +264,7 @@
     </div>
     <button type="submit" class="btn-primary" id="btnGuardarEdit">Guardar cambios</button>
     <button type="button" class="btn-secondary" id="btnCancelarEdit">Cancelar</button>
+    <button type="button" class="btn-eliminar" id="btnEliminarEdit">🗑️ Eliminar gasto</button>
     <div class="status" id="statusEdit"></div>
   </form>
 </div>
@@ -331,11 +345,16 @@ const btnCancelarMes = document.getElementById("btnCancelarMes");
 const btnVerMes = document.getElementById("btnVerMes");
 const selectMes = document.getElementById("selectMes");
 const selectAnio = document.getElementById("selectAnio");
+const rangoDesdeInput = document.getElementById("rangoDesde");
+const rangoHastaInput = document.getElementById("rangoHasta");
+const btnVerRango = document.getElementById("btnVerRango");
+const statusMes = document.getElementById("statusMes");
 const overlayEdit = document.getElementById("overlayEdit");
 const sheetEdit = document.getElementById("sheetEdit");
 const formEdit = document.getElementById("formEdit");
 const statusEdit = document.getElementById("statusEdit");
 const btnCancelarEdit = document.getElementById("btnCancelarEdit");
+const btnEliminarEdit = document.getElementById("btnEliminarEdit");
 const editCategoriaSelect = document.getElementById("editCategoria");
 const editObraSelect = document.getElementById("editObra");
 const avisoEdit = document.getElementById("avisoEdit");
@@ -378,10 +397,19 @@ const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
 const hoy = new Date();
 let mesActual = hoy.getMonth() + 1;
 let anioActual = hoy.getFullYear();
+let modoRango = false;
+let rangoDesde = "";
+let rangoHasta = "";
 
 function hoyLocal_() {
   const pad = (n) => String(n).padStart(2, "0");
   return `${hoy.getFullYear()}-${pad(hoy.getMonth() + 1)}-${pad(hoy.getDate())}`;
+}
+
+function formatoFechaCorta_(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
 }
 
 selectMes.innerHTML = MESES.map((m, i) => `<option value="${i + 1}">${m}</option>`).join("");
@@ -391,6 +419,7 @@ selectAnio.innerHTML = anios.map((a) => `<option value="${a}">${a}</option>`).jo
 function abrirSheetMes() {
   selectMes.value = mesActual;
   selectAnio.value = anioActual;
+  statusMes.textContent = "";
   overlayMes.classList.add("open");
   sheetMes.classList.add("open");
 }
@@ -402,8 +431,22 @@ btnMes.addEventListener("click", abrirSheetMes);
 btnCancelarMes.addEventListener("click", cerrarSheetMes);
 overlayMes.addEventListener("click", cerrarSheetMes);
 btnVerMes.addEventListener("click", () => {
+  modoRango = false;
   mesActual = Number(selectMes.value);
   anioActual = Number(selectAnio.value);
+  cerrarSheetMes();
+  cargarGastos();
+});
+
+btnVerRango.addEventListener("click", () => {
+  const desde = rangoDesdeInput.value;
+  const hasta = rangoHastaInput.value;
+  if (!desde || !hasta) { statusMes.textContent = "Escoge la fecha desde y hasta."; return; }
+  if (desde > hasta) { statusMes.textContent = "La fecha 'desde' no puede ser posterior a 'hasta'."; return; }
+  statusMes.textContent = "";
+  modoRango = true;
+  rangoDesde = desde;
+  rangoHasta = hasta;
   cerrarSheetMes();
   cargarGastos();
 });
@@ -514,6 +557,8 @@ function abrirEdicion(id, opts) {
   if (tieneCaja) editTrabajadorCajaSelect.value = g.trabajador;
   formEdit.dataset.id = id;
   avisoEdit.style.display = (opts && opts.necesitaRevision) ? "block" : "none";
+  avisoEdit.textContent = (opts && opts.motivo)
+    || "No pudimos leer todos los datos de esta factura automáticamente. Por favor completa o corrige los datos abajo.";
   overlayEdit.classList.add("open");
   sheetEdit.classList.add("open");
 }
@@ -522,13 +567,21 @@ function renderLista(gastos) {
   gastosActuales = gastos;
   const main = document.getElementById("lista");
 
-  const nombreMes = MESES[mesActual - 1];
-  const esMesActual = mesActual === (hoy.getMonth() + 1) && anioActual === hoy.getFullYear();
   const totalMes = gastos.reduce((sum, g) => sum + (g.valor || 0), 0);
-  btnMes.innerHTML = `${esMesActual ? "Este mes" : nombreMes + " " + anioActual}: ${fmt.format(totalMes)} ▾`;
+  let etiqueta, mensajeVacio;
+  if (modoRango) {
+    etiqueta = `Del ${formatoFechaCorta_(rangoDesde)} al ${formatoFechaCorta_(rangoHasta)}`;
+    mensajeVacio = `No hay gastos registrados entre el ${formatoFechaCorta_(rangoDesde)} y el ${formatoFechaCorta_(rangoHasta)}.`;
+  } else {
+    const nombreMes = MESES[mesActual - 1];
+    const esMesActual = mesActual === (hoy.getMonth() + 1) && anioActual === hoy.getFullYear();
+    etiqueta = esMesActual ? "Este mes" : nombreMes + " " + anioActual;
+    mensajeVacio = `No hay gastos registrados en ${nombreMes} ${anioActual}.`;
+  }
+  btnMes.innerHTML = `${etiqueta}: ${fmt.format(totalMes)} ▾`;
 
   if (!gastos.length) {
-    main.innerHTML = `<div class="card empty">No hay gastos registrados en ${nombreMes} ${anioActual}.<br/>Toca el botón + para agregar uno, o el total de arriba para ver otro mes.</div>`;
+    main.innerHTML = `<div class="card empty">${mensajeVacio}<br/>Toca el botón + para agregar uno, o el total de arriba para ver otro periodo.</div>`;
     return;
   }
 
@@ -556,7 +609,10 @@ function renderLista(gastos) {
 async function cargarGastos() {
   try {
     btnMes.textContent = "Cargando...";
-    const res = await fetch(`${API_BASE}/api/gastos?mes=${mesActual}&anio=${anioActual}`);
+    const url = modoRango
+      ? `${API_BASE}/api/gastos?desde=${rangoDesde}&hasta=${rangoHasta}`
+      : `${API_BASE}/api/gastos?mes=${mesActual}&anio=${anioActual}`;
+    const res = await fetch(url);
     const data = await res.json();
     renderLista(data);
   } catch (e) {
@@ -598,7 +654,7 @@ form.addEventListener("submit", async (e) => {
     await cargarObras();
     await cargarTrabajadores();
     if (data.necesitaRevision && data.id) {
-      abrirEdicion(data.id, { necesitaRevision: true });
+      abrirEdicion(data.id, { necesitaRevision: true, motivo: data.motivoRevision });
     }
   } catch (err) {
     status.textContent = "Error: " + err.message;
@@ -639,6 +695,22 @@ formEdit.addEventListener("submit", async (e) => {
     if (!res.ok) throw new Error(data.error || "Error al guardar los cambios");
     statusEdit.textContent = "Cambios guardados ✓";
     setTimeout(() => { cerrarSheetEdit(); cargarGastos(); cargarObras(); }, 700);
+  } catch (err) {
+    statusEdit.textContent = "Error: " + err.message;
+  }
+});
+
+btnEliminarEdit.addEventListener("click", async () => {
+  const id = formEdit.dataset.id;
+  if (!id) return;
+  if (!confirm("¿Seguro que quieres eliminar este gasto? Esta acción no se puede deshacer.")) return;
+  statusEdit.innerHTML = '<span class="spinner"></span> Eliminando...';
+  try {
+    const res = await fetch(`${API_BASE}/api/gastos/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Error al eliminar el gasto");
+    statusEdit.textContent = "Gasto eliminado ✓";
+    setTimeout(() => { cerrarSheetEdit(); cargarGastos(); }, 500);
   } catch (err) {
     statusEdit.textContent = "Error: " + err.message;
   }
