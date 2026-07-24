@@ -2,6 +2,8 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
+const fs = require("fs");
+const path = require("path");
 const Anthropic = require("@anthropic-ai/sdk");
 const PDFDocument = require("pdfkit");
 
@@ -15,12 +17,15 @@ const CATEGORIAS = [
   "Transporte", "Servicios", "Papeleria", "Mantenimiento", "Otros",
 ];
 
+const LOGO_PATH = path.join(__dirname, "..", "frontend", "icons", "logo-full.png");
+const LOGO_BUFFER = fs.existsSync(LOGO_PATH) ? fs.readFileSync(LOGO_PATH) : null;
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(require("path").join(__dirname, "..", "frontend")));
+app.use(express.static(path.join(__dirname, "..", "frontend")));
 
 const upload = multer({ limits: { fileSize: 12 * 1024 * 1024 } });
 
@@ -40,7 +45,7 @@ Extrae del recibo/factura estos datos y responde UNICAMENTE con un JSON valido, 
   "nit": "NIT o numero de identificacion tributaria del comercio o proveedor",
   "valor": 12345,
   "categoria": "una de estas: ${CATEGORIAS.join(", ")}",
-  "notas": "detalle breve opcional, por ejemplo items comprados"
+  "descripcion": "detalle de los articulos o items comprados, tal como aparecen en la factura"
 }
 
 Reglas:
@@ -112,7 +117,8 @@ app.post("/api/gastos", upload.single("foto"), async (req, res) => {
     const nit = (extraido && extraido.nit) || "";
     const valor = Number(extraido && extraido.valor) || 0;
     const categoria = extraido && CATEGORIAS.includes(extraido.categoria) ? extraido.categoria : "Otros";
-    const notas = (extraido && extraido.notas) || "";
+    const detalleIA = (extraido && extraido.descripcion) || "";
+    const descripcionFinal = [descripcion, detalleIA].filter(Boolean).join(" — ");
     const estado = necesitaRevision ? "No se pudo leer - completar a mano" : "Pendiente revision";
 
     const extension = mediaType.includes("png") ? "png" : "jpg";
@@ -122,7 +128,7 @@ app.post("/api/gastos", upload.single("foto"), async (req, res) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        fecha, descripcion, comercio, categoria, valor, notas, obra, nit, estado, trabajador,
+        fecha, descripcion: descripcionFinal, comercio, categoria, valor, obra, nit, estado, trabajador,
         fotoBase64: base64Image, fotoMimeType: mediaType, fotoNombre,
       }),
     });
@@ -236,6 +242,13 @@ app.get("/api/caja-menor/:id/pdf", async (req, res) => {
     const doc = new PDFDocument({ margin: 40 });
     doc.pipe(res);
 
+    if (LOGO_BUFFER) {
+      const logoWidth = 90;
+      doc.image(LOGO_BUFFER, doc.page.margins.left, doc.page.margins.top, { fit: [logoWidth, logoWidth] });
+      doc.y = doc.page.margins.top + logoWidth + 10;
+      doc.x = doc.page.margins.left;
+    }
+
     doc.fontSize(18).fillColor("#1F4E78").text("Reporte de caja menor", { align: "left" });
     doc.moveDown(0.3);
     doc.fontSize(12).fillColor("#000000");
@@ -292,13 +305,13 @@ app.get("/api/caja-menor/:id/pdf", async (req, res) => {
 app.put("/api/gastos/:id", async (req, res) => {
   try {
     requireAppsScriptUrl();
-    const { fecha, descripcion, comercio, categoria, valor, notas, obra, nit, trabajador } = req.body;
+    const { fecha, descripcion, comercio, categoria, valor, obra, nit, trabajador } = req.body;
     const scriptRes = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         accion: "editar", id: req.params.id,
-        fecha, descripcion, comercio, categoria, valor: Number(valor) || 0, notas, obra, nit,
+        fecha, descripcion, comercio, categoria, valor: Number(valor) || 0, obra, nit,
         trabajador: trabajador || "",
         estado: "Registrado",
       }),
