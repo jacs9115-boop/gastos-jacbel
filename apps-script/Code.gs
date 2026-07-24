@@ -11,6 +11,9 @@ function doPost(e) {
     if (body.accion === "editar") {
       return editarGasto_(body);
     }
+    if (body.accion === "eliminar") {
+      return eliminarGasto_(body);
+    }
     if (body.accion === "crear_trabajador") {
       return crearTrabajador_(body);
     }
@@ -64,7 +67,6 @@ function crearGasto_(body) {
     estado: estado, trabajador: trabajador,
   });
 }
-
 function editarGasto_(body) {
   var sheet = hojaGastos_();
   var lastRow = sheet.getLastRow();
@@ -97,6 +99,22 @@ function editarGasto_(body) {
 
   return jsonOutput_({ ok: true, id: body.id });
 }
+
+function eliminarGasto_(body) {
+  var sheet = hojaGastos_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return jsonOutput_({ ok: false, error: "No hay gastos registrados" });
+
+  var ids = sheet.getRange(2, 12, lastRow - 1, 1).getValues();
+  var rowIndex = -1;
+  for (var i = 0; i < ids.length; i++) {
+    if (ids[i][0] === body.id) { rowIndex = i + 2; break; }
+  }
+  if (rowIndex === -1) return jsonOutput_({ ok: false, error: "No se encontro el gasto a eliminar" });
+
+  sheet.deleteRow(rowIndex);
+  return jsonOutput_({ ok: true });
+}
 function doGet(e) {
   try {
     if (e.parameter.obras === "1") {
@@ -110,6 +128,9 @@ function doGet(e) {
         caja: obtenerCajaPorId_(e.parameter.cajaMenorId),
         gastos: obtenerGastosDeCaja_(e.parameter.cajaMenorId),
       });
+    }
+    if (e.parameter.desde && e.parameter.hasta) {
+      return jsonOutput_(obtenerGastosPorRango_(e.parameter.desde, e.parameter.hasta));
     }
     if (e.parameter.mes && e.parameter.anio) {
       var mes = parseInt(e.parameter.mes, 10);
@@ -145,6 +166,31 @@ function obtenerGastosPorMes_(mes, anio) {
   return gastos;
 }
 
+function obtenerGastosPorRango_(desde, hasta) {
+  var sheet = hojaGastos_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var values = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
+  var gastos = [];
+  values.forEach(function (r) {
+    var fechaTexto = fechaATexto_(r[0]);
+    if (fechaTexto && fechaTexto >= desde && fechaTexto <= hasta) {
+      gastos.push(filaAGasto_(r));
+    }
+  });
+  gastos.reverse();
+  return gastos;
+}
+
+function fechaATexto_(fecha) {
+  if (fecha === null || fecha === undefined || fecha === "") return null;
+  if (typeof fecha === "object" && typeof fecha.getFullYear === "function") {
+    return Utilities.formatDate(fecha, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+  var texto = String(fecha);
+  var m = texto.match(/(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : texto.slice(0, 10);
+}
 function obtenerAnioMes_(fecha) {
   if (fecha === null || fecha === undefined || fecha === "") return null;
   var texto;
@@ -180,6 +226,7 @@ function obtenerObras_() {
   lista.sort();
   return lista;
 }
+
 // ---------- Caja menor ----------
 
 function crearTrabajador_(body) {
@@ -199,7 +246,6 @@ function crearTrabajador_(body) {
   sheet.appendRow([nombre, true]);
   return jsonOutput_({ ok: true });
 }
-
 function crearCajaMenor_(body) {
   var trabajador = (body.trabajador || "").trim();
   var fecha = body.fecha || "";
