@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
 const Anthropic = require("@anthropic-ai/sdk");
+const PDFDocument = require("pdfkit");
 
 const PORT = process.env.PORT || 3000;
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
@@ -50,7 +51,6 @@ Reglas:
 - "categoria" debe ser exactamente una de las opciones listadas.
 - Responde SIEMPRE con el JSON completo, incluso si la imagen es dificil de leer (letra manuscrita poco clara, foto borrosa, etc). Nunca respondas con una disculpa ni texto explicando que no puedes leerla: en vez de eso, haz tu mejor estimacion razonable para cada campo, y si de verdad un campo especifico es ilegible, usa "" para textos o 0 para "valor" en ese campo unicamente (no inventes un valor que no puedas sustentar en la imagen o la descripcion).`;
 }
-
 async function leerFacturaConIA_(base64Image, mediaType, descripcion) {
   const intentos = [CLAUDE_MODEL, CLAUDE_MODEL_REINTENTO];
   let ultimoExtraido = null;
@@ -91,6 +91,7 @@ async function leerFacturaConIA_(base64Image, mediaType, descripcion) {
   // haya logrado extraer (puede tener campos vacios) y marcamos para revision manual.
   return { extraido: ultimoExtraido, necesitaRevision: true };
 }
+
 app.post("/api/gastos", upload.single("foto"), async (req, res) => {
   try {
     requireAppsScriptUrl();
@@ -136,7 +137,6 @@ app.post("/api/gastos", upload.single("foto"), async (req, res) => {
     res.status(500).json({ error: err.message || "Error inesperado" });
   }
 });
-
 app.get("/api/gastos", async (req, res) => {
   try {
     requireAppsScriptUrl();
@@ -165,6 +165,7 @@ app.get("/api/obras", async (req, res) => {
     res.status(500).json({ error: err.message || "Error inesperado" });
   }
 });
+
 app.get("/api/trabajadores", async (req, res) => {
   try {
     requireAppsScriptUrl();
@@ -212,7 +213,82 @@ app.post("/api/caja-menor", async (req, res) => {
     res.status(500).json({ error: err.message || "Error inesperado" });
   }
 });
+app.get("/api/caja-menor/:id/pdf", async (req, res) => {
+  try {
+    requireAppsScriptUrl();
+    const cajaId = req.params.id;
+    const scriptRes = await fetch(`${APPS_SCRIPT_URL}?cajaMenorId=${encodeURIComponent(cajaId)}`);
+    const data = await scriptRes.json();
+    if (!data.caja) {
+      return res.status(404).json({ error: "No se encontro la caja menor" });
+    }
 
+    const { caja, gastos } = data;
+    const consumido = gastos.reduce((s, g) => s + (Number(g.valor) || 0), 0);
+    const deudaArrastrada = Number(caja.deudaArrastrada) || 0;
+    const restante = (Number(caja.valorEntregado) || 0) - deudaArrastrada - consumido;
+    const fmt = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
+    const nombreArchivo = `caja-menor-${(caja.trabajador || "trabajador").replace(/[^a-zA-Z0-9._-]+/g, "_")}.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${nombreArchivo}"`);
+
+    const doc = new PDFDocument({ margin: 40 });
+    doc.pipe(res);
+
+    doc.fontSize(18).fillColor("#1F4E78").text("Reporte de caja menor", { align: "left" });
+    doc.moveDown(0.3);
+    doc.fontSize(12).fillColor("#000000");
+    doc.text(`Trabajador: ${caja.trabajador || ""}`);
+    doc.text(`Fecha de entrega: ${(caja.fecha || "").toString().slice(0, 10)}`);
+    doc.text(`Valor entregado: ${fmt(caja.valorEntregado)}`);
+    if (deudaArrastrada > 0) {
+      doc.text(`Deuda arrastrada de la caja anterior: ${fmt(deudaArrastrada)}`);
+    }
+    doc.text(`Total gastado: ${fmt(consumido)}`);
+    doc.fillColor(restante < 0 ? "#C0392B" : "#2E7D32");
+    doc.text(restante < 0
+      ? `Le deben al trabajador: ${fmt(-restante)}`
+      : `Saldo a favor de la empresa: ${fmt(restante)}`);
+    doc.fillColor("#000000");
+    doc.moveDown();
+
+    doc.fontSize(13).text("Gastos cargados a esta caja menor", { underline: true });
+    doc.moveDown(0.3);
+    doc.fontSize(10);
+    if (!gastos.length) {
+      doc.text("No hay gastos cargados a esta caja menor todavia.");
+    }
+    gastos.forEach((g, i) => {
+      doc.text(`${i + 1}. ${(g.fecha || "").toString().slice(0, 10)} - ${g.comercio || "Sin nombre"}${g.nit ? " (NIT " + g.nit + ")" : ""}`);
+      if (g.descripcion) doc.text(`   ${g.descripcion}`);
+      doc.text(`   Valor: ${fmt(g.valor)}`);
+      doc.moveDown(0.2);
+    });
+
+    for (const g of gastos) {
+      if (!g.fotoUrl) continue;
+      const m = g.fotoUrl.match(/\/d\/([^/]+)\//);
+      if (!m) continue;
+      try {
+        const imgRes = await fetch(`https://drive.google.com/thumbnail?id=${m[1]}&sz=w1000`);
+        if (!imgRes.ok) continue;
+        const buffer = Buffer.from(await imgRes.arrayBuffer());
+        doc.addPage();
+        doc.fontSize(11).fillColor("#000000").text(`Anexo: ${(g.fecha || "").toString().slice(0, 10)} - ${g.comercio || ""}`);
+        doc.moveDown(0.3);
+        doc.image(buffer, { fit: [500, 650], align: "center" });
+      } catch (e) {
+        // si una factura no se puede descargar, se omite y se sigue con las demas
+      }
+    }
+
+    doc.end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Error inesperado" });
+  }
+});
 app.put("/api/gastos/:id", async (req, res) => {
   try {
     requireAppsScriptUrl();
