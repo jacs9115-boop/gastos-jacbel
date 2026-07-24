@@ -240,10 +240,6 @@
       <textarea id="editDescripcion" name="descripcion"></textarea>
     </div>
     <div class="field">
-      <label for="editNotas">Notas</label>
-      <textarea id="editNotas" name="notas"></textarea>
-    </div>
-    <div class="field">
       <label class="checkbox-row" for="editEsCajaMenor">
         <input type="checkbox" id="editEsCajaMenor" />
         <span>💵 Este gasto se pagó con caja menor</span>
@@ -512,7 +508,6 @@ function abrirEdicion(id, opts) {
   document.getElementById("editValor").value = g.valor || 0;
   poblarSelectObra_(editObraSelect, g.obra || "");
   document.getElementById("editDescripcion").value = g.descripcion || "";
-  document.getElementById("editNotas").value = g.notas || "";
   const tieneCaja = !!g.trabajador;
   editEsCajaMenorCheckbox.checked = tieneCaja;
   editCampoTrabajadorCaja.style.display = tieneCaja ? "block" : "none";
@@ -631,7 +626,6 @@ formEdit.addEventListener("submit", async (e) => {
     valor: Number(document.getElementById("editValor").value) || 0,
     obra: editObraSelect.value === "__nueva__" ? "" : editObraSelect.value,
     descripcion: document.getElementById("editDescripcion").value.trim(),
-    notas: document.getElementById("editNotas").value.trim(),
     trabajador,
   };
   statusEdit.innerHTML = '<span class="spinner"></span> Guardando...';
