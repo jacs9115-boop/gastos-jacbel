@@ -50,6 +50,7 @@ Reglas:
 - "categoria" debe ser exactamente una de las opciones listadas.
 - Responde SIEMPRE con el JSON completo, incluso si la imagen es dificil de leer (letra manuscrita poco clara, foto borrosa, etc). Nunca respondas con una disculpa ni texto explicando que no puedes leerla: en vez de eso, haz tu mejor estimacion razonable para cada campo, y si de verdad un campo especifico es ilegible, usa "" para textos o 0 para "valor" en ese campo unicamente (no inventes un valor que no puedas sustentar en la imagen o la descripcion).`;
 }
+
 async function leerFacturaConIA_(base64Image, mediaType, descripcion) {
   const intentos = [CLAUDE_MODEL, CLAUDE_MODEL_REINTENTO];
   let ultimoExtraido = null;
@@ -135,6 +136,7 @@ app.post("/api/gastos", upload.single("foto"), async (req, res) => {
     res.status(500).json({ error: err.message || "Error inesperado" });
   }
 });
+
 app.get("/api/gastos", async (req, res) => {
   try {
     requireAppsScriptUrl();
@@ -163,7 +165,6 @@ app.get("/api/obras", async (req, res) => {
     res.status(500).json({ error: err.message || "Error inesperado" });
   }
 });
-
 app.get("/api/trabajadores", async (req, res) => {
   try {
     requireAppsScriptUrl();
@@ -193,6 +194,7 @@ app.post("/api/trabajadores", async (req, res) => {
     res.status(500).json({ error: err.message || "Error inesperado" });
   }
 });
+
 app.post("/api/caja-menor", async (req, res) => {
   try {
     requireAppsScriptUrl();
@@ -214,13 +216,14 @@ app.post("/api/caja-menor", async (req, res) => {
 app.put("/api/gastos/:id", async (req, res) => {
   try {
     requireAppsScriptUrl();
-    const { fecha, descripcion, comercio, categoria, valor, notas, obra, nit } = req.body;
+    const { fecha, descripcion, comercio, categoria, valor, notas, obra, nit, trabajador } = req.body;
     const scriptRes = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         accion: "editar", id: req.params.id,
         fecha, descripcion, comercio, categoria, valor: Number(valor) || 0, notas, obra, nit,
+        trabajador: trabajador || "",
         estado: "Registrado",
       }),
     });
