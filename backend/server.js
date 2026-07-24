@@ -28,8 +28,28 @@ function requireAppsScriptUrl() {
 }
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
+
 function construirPrompt_(descripcion) {
   return `Estas leyendo la foto de una factura o recibo de un gasto de una empresa colombiana de construccion/ingenieria llamada JACBEL. La factura puede estar impresa o escrita a mano (manuscrita); lee con cuidado tanto letra de imprenta como letra manuscrita, incluyendo numeros escritos a mano que a veces son ambiguos (por ejemplo diferenciar 1 de 7, o 0 de 6). El usuario escribio esta descripcion del gasto: "${descripcion || "(sin descripcion)"}".
+
+Extrae del recibo/factura estos datos y responde UNICAMENTE con un JSON valido, sin texto adicional, con esta forma exacta:
+{
+  "fecha": "YYYY-MM-DD",
+  "comercio": "nombre del comercio o proveedor",
+  "nit": "NIT o numero de identificacion tributaria del comercio o proveedor",
+  "valor": 12345,
+  "categoria": "una de estas: ${CATEGORIAS.join(", ")}",
+  "notas": "detalle breve opcional, por ejemplo items comprados"
+}
+
+Reglas:
+- "valor" es el total pagado en pesos colombianos (COP), como numero entero sin puntos ni comas ni simbolo de moneda.
+- "nit" debe copiarse tal como aparece impreso o escrito en la factura (con puntos y guion si los tiene, por ejemplo "900.123.456-7"). Suele estar cerca del nombre del comercio, a veces con la etiqueta "NIT" o "Nit.". Si no aparece ningun NIT legible en la foto, deja este campo como cadena vacia "".
+- Si no logras leer la fecha en la foto, usa la fecha de hoy.
+- Si no logras leer el comercio, usa la descripcion del usuario para inferirlo.
+- "categoria" debe ser exactamente una de las opciones listadas.
+- Responde SIEMPRE con el JSON completo, incluso si la imagen es dificil de leer (letra manuscrita poco clara, foto borrosa, etc). Nunca respondas con una disculpa ni texto explicando que no puedes leerla: en vez de eso, haz tu mejor estimacion razonable para cada campo, y si de verdad un campo especifico es ilegible, usa "" para textos o 0 para "valor" en ese campo unicamente (no inventes un valor que no puedas sustentar en la imagen o la descripcion).`;
+}
 async function leerFacturaConIA_(base64Image, mediaType, descripcion) {
   const intentos = [CLAUDE_MODEL, CLAUDE_MODEL_REINTENTO];
   let ultimoExtraido = null;
@@ -70,7 +90,6 @@ async function leerFacturaConIA_(base64Image, mediaType, descripcion) {
   // haya logrado extraer (puede tener campos vacios) y marcamos para revision manual.
   return { extraido: ultimoExtraido, necesitaRevision: true };
 }
-
 app.post("/api/gastos", upload.single("foto"), async (req, res) => {
   try {
     requireAppsScriptUrl();
@@ -116,7 +135,6 @@ app.post("/api/gastos", upload.single("foto"), async (req, res) => {
     res.status(500).json({ error: err.message || "Error inesperado" });
   }
 });
-
 app.get("/api/gastos", async (req, res) => {
   try {
     requireAppsScriptUrl();
@@ -175,7 +193,6 @@ app.post("/api/trabajadores", async (req, res) => {
     res.status(500).json({ error: err.message || "Error inesperado" });
   }
 });
-
 app.post("/api/caja-menor", async (req, res) => {
   try {
     requireAppsScriptUrl();
@@ -219,23 +236,3 @@ app.put("/api/gastos/:id", async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Gastos JACBEL escuchando en puerto ${PORT}`));
-
-
-Extrae del recibo/factura estos datos y responde UNICAMENTE con un JSON valido, sin texto adicional, con esta forma exacta:
-{
-  "fecha": "YYYY-MM-DD",
-  "comercio": "nombre del comercio o proveedor",
-  "nit": "NIT o numero de identificacion tributaria del comercio o proveedor",
-  "valor": 12345,
-  "categoria": "una de estas: ${CATEGORIAS.join(", ")}",
-  "notas": "detalle breve opcional, por ejemplo items comprados"
-}
-
-Reglas:
-- "valor" es el total pagado en pesos colombianos (COP), como numero entero sin puntos ni comas ni simbolo de moneda.
-- "nit" debe copiarse tal como aparece impreso o escrito en la factura (con puntos y guion si los tiene, por ejemplo "900.123.456-7"). Suele estar cerca del nombre del comercio, a veces con la etiqueta "NIT" o "Nit.". Si no aparece ningun NIT legible en la foto, deja este campo como cadena vacia "".
-- Si no logras leer la fecha en la foto, usa la fecha de hoy.
-- Si no logras leer el comercio, usa la descripcion del usuario para inferirlo.
-- "categoria" debe ser exactamente una de las opciones listadas.
-- Responde SIEMPRE con el JSON completo, incluso si la imagen es dificil de leer (letra manuscrita poco clara, foto borrosa, etc). Nunca respondas con una disculpa ni texto explicando que no puedes leerla: en vez de eso, haz tu mejor estimacion razonable para cada campo, y si de verdad un campo especifico es ilegible, usa "" para textos o 0 para "valor" en ese campo unicamente (no inventes un valor que no puedas sustentar en la imagen o la descripcion).`;
-}
