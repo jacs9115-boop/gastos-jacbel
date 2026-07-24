@@ -120,6 +120,7 @@
 </style>
 </head>
 <body>
+
 <header>
   <div class="brand">
     <img src="icons/icon-180.png" alt="Logo JACBEL" />
@@ -138,7 +139,6 @@
 <button class="fab" id="btnAbrir" aria-label="Agregar gasto">+</button>
 
 <div class="sheet-overlay" id="overlay"></div>
-
 <div class="sheet" id="sheet">
   <h2>Nuevo gasto</h2>
   <form id="form">
@@ -230,12 +230,21 @@
       <label for="editNotas">Notas</label>
       <textarea id="editNotas" name="notas"></textarea>
     </div>
+    <div class="field">
+      <label class="checkbox-row" for="editEsCajaMenor">
+        <input type="checkbox" id="editEsCajaMenor" />
+        <span>💵 Este gasto se pagó con caja menor</span>
+      </label>
+      <div id="editCampoTrabajadorCaja" style="display:none; margin-top:10px;">
+        <select id="editTrabajadorCaja"></select>
+        <div class="hint">Solo aparecen los trabajadores que tienen una caja menor activa. Agrégalas desde el ícono 👛.</div>
+      </div>
+    </div>
     <button type="submit" class="btn-primary" id="btnGuardarEdit">Guardar cambios</button>
     <button type="button" class="btn-secondary" id="btnCancelarEdit">Cancelar</button>
     <div class="status" id="statusEdit"></div>
   </form>
 </div>
-
 <div class="sheet-overlay" id="overlayCaja"></div>
 
 <div class="sheet" id="sheetCaja">
@@ -292,6 +301,7 @@ const obraSelect = document.getElementById("obra");
 const esCajaMenorCheckbox = document.getElementById("esCajaMenor");
 const campoTrabajadorCaja = document.getElementById("campoTrabajadorCaja");
 const trabajadorCajaSelect = document.getElementById("trabajadorCaja");
+
 const overlayMes = document.getElementById("overlayMes");
 const sheetMes = document.getElementById("sheetMes");
 const btnMes = document.getElementById("btnMes");
@@ -308,6 +318,9 @@ const btnCancelarEdit = document.getElementById("btnCancelarEdit");
 const editCategoriaSelect = document.getElementById("editCategoria");
 const editObraSelect = document.getElementById("editObra");
 const avisoEdit = document.getElementById("avisoEdit");
+const editEsCajaMenorCheckbox = document.getElementById("editEsCajaMenor");
+const editCampoTrabajadorCaja = document.getElementById("editCampoTrabajadorCaja");
+const editTrabajadorCajaSelect = document.getElementById("editTrabajadorCaja");
 
 const overlayCaja = document.getElementById("overlayCaja");
 const sheetCaja = document.getElementById("sheetCaja");
@@ -393,9 +406,15 @@ function cerrarSheetEdit() {
   sheetEdit.classList.remove("open");
   statusEdit.textContent = "";
   avisoEdit.style.display = "none";
+  editEsCajaMenorCheckbox.checked = false;
+  editCampoTrabajadorCaja.style.display = "none";
 }
 btnCancelarEdit.addEventListener("click", cerrarSheetEdit);
 overlayEdit.addEventListener("click", cerrarSheetEdit);
+
+editEsCajaMenorCheckbox.addEventListener("change", () => {
+  editCampoTrabajadorCaja.style.display = editEsCajaMenorCheckbox.checked ? "block" : "none";
+});
 
 fotoInput.addEventListener("change", () => {
   const file = fotoInput.files[0];
@@ -412,6 +431,7 @@ const fmt = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP",
 
 let gastosActuales = [];
 let trabajadoresActuales = [];
+
 // ---------- Selector de obra (seleccionar o agregar nueva) ----------
 
 let obrasActuales = [];
@@ -447,7 +467,6 @@ async function cargarObras() {
     // sin conexion: los selects quedan solo con la opcion de agregar nueva
   }
 }
-
 // ---------- Caja menor ----------
 
 function abrirEdicion(id, opts) {
@@ -461,12 +480,17 @@ function abrirEdicion(id, opts) {
   poblarSelectObra_(editObraSelect, g.obra || "");
   document.getElementById("editDescripcion").value = g.descripcion || "";
   document.getElementById("editNotas").value = g.notas || "";
+  const tieneCaja = !!g.trabajador;
+  editEsCajaMenorCheckbox.checked = tieneCaja;
+  editCampoTrabajadorCaja.style.display = tieneCaja ? "block" : "none";
+  if (tieneCaja) editTrabajadorCajaSelect.value = g.trabajador;
   formEdit.dataset.id = id;
   avisoEdit.style.display = (opts && opts.necesitaRevision) ? "block" : "none";
   overlayEdit.classList.add("open");
   sheetEdit.classList.add("open");
 }
 window.abrirEdicion = abrirEdicion;
+
 function renderLista(gastos) {
   gastosActuales = gastos;
   const main = document.getElementById("lista");
@@ -555,9 +579,18 @@ form.addEventListener("submit", async (e) => {
     btnGuardar.disabled = false;
   }
 });
+
 formEdit.addEventListener("submit", async (e) => {
   e.preventDefault();
   const id = formEdit.dataset.id;
+  let trabajador = "";
+  if (editEsCajaMenorCheckbox.checked) {
+    trabajador = editTrabajadorCajaSelect.value;
+    if (!trabajador) {
+      statusEdit.textContent = "Selecciona el trabajador de la caja menor, o desmarca la casilla.";
+      return;
+    }
+  }
   const payload = {
     fecha: document.getElementById("editFecha").value,
     comercio: document.getElementById("editComercio").value.trim(),
@@ -567,6 +600,7 @@ formEdit.addEventListener("submit", async (e) => {
     obra: editObraSelect.value === "__nueva__" ? "" : editObraSelect.value,
     descripcion: document.getElementById("editDescripcion").value.trim(),
     notas: document.getElementById("editNotas").value.trim(),
+    trabajador,
   };
   statusEdit.innerHTML = '<span class="spinner"></span> Guardando...';
   try {
@@ -583,7 +617,6 @@ formEdit.addEventListener("submit", async (e) => {
     statusEdit.textContent = "Error: " + err.message;
   }
 });
-
 // ---------- Caja menor: administracion ----------
 
 function abrirSheetCaja() {
@@ -600,6 +633,7 @@ function cerrarSheetCaja() {
 btnCajaMenor.addEventListener("click", abrirSheetCaja);
 btnCerrarCaja.addEventListener("click", cerrarSheetCaja);
 overlayCaja.addEventListener("click", cerrarSheetCaja);
+
 function renderTrabajadores_() {
   if (!trabajadoresActuales.length) {
     listaTrabajadores.innerHTML = '<div class="hint">Todavía no has agregado trabajadores.</div>';
@@ -631,6 +665,7 @@ function renderTrabajadores_() {
     </div>`;
   }).join("");
 }
+
 async function cargarTrabajadores() {
   try {
     const res = await fetch(API_BASE + "/api/trabajadores");
@@ -638,14 +673,17 @@ async function cargarTrabajadores() {
     trabajadoresActuales = Array.isArray(data) ? data : [];
     renderTrabajadores_();
     const conCaja = trabajadoresActuales.filter((t) => t.cajaActiva);
-    trabajadorCajaSelect.innerHTML = conCaja.length
+    const opcionesHtml = conCaja.length
       ? conCaja.map((t) => `<option value="${t.nombre}">${t.nombre} (resta ${fmt.format(t.cajaActiva.restante)})</option>`).join("")
       : '<option value="">No hay trabajadores con caja activa</option>';
+    trabajadorCajaSelect.innerHTML = opcionesHtml;
+    const trabajadorEditPrevio = editTrabajadorCajaSelect.value;
+    editTrabajadorCajaSelect.innerHTML = opcionesHtml;
+    if (trabajadorEditPrevio) editTrabajadorCajaSelect.value = trabajadorEditPrevio;
   } catch (e) {
     // sin conexion, se ignora
   }
 }
-
 btnAgregarTrabajador.addEventListener("click", async () => {
   const nombre = nuevoTrabajadorInput.value.trim();
   if (!nombre) { statusTrabajador.textContent = "Escribe el nombre del trabajador."; return; }
@@ -665,6 +703,7 @@ btnAgregarTrabajador.addEventListener("click", async () => {
     statusTrabajador.textContent = "Error: " + err.message;
   }
 });
+
 function abrirNuevaCaja(nombre, tieneCajaActiva) {
   nuevaCajaTrabajadorTexto.value = nombre;
   nuevaCajaValor.value = "";
