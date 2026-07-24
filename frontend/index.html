@@ -292,7 +292,6 @@ const obraSelect = document.getElementById("obra");
 const esCajaMenorCheckbox = document.getElementById("esCajaMenor");
 const campoTrabajadorCaja = document.getElementById("campoTrabajadorCaja");
 const trabajadorCajaSelect = document.getElementById("trabajadorCaja");
-
 const overlayMes = document.getElementById("overlayMes");
 const sheetMes = document.getElementById("sheetMes");
 const btnMes = document.getElementById("btnMes");
@@ -300,6 +299,7 @@ const btnCancelarMes = document.getElementById("btnCancelarMes");
 const btnVerMes = document.getElementById("btnVerMes");
 const selectMes = document.getElementById("selectMes");
 const selectAnio = document.getElementById("selectAnio");
+
 const overlayEdit = document.getElementById("overlayEdit");
 const sheetEdit = document.getElementById("sheetEdit");
 const formEdit = document.getElementById("formEdit");
@@ -329,6 +329,7 @@ const btnCancelarNuevaCaja = document.getElementById("btnCancelarNuevaCaja");
 const statusNuevaCaja = document.getElementById("statusNuevaCaja");
 
 editCategoriaSelect.innerHTML = CATEGORIAS.map((c) => `<option value="${c}">${c}</option>`).join("");
+
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
   "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
@@ -345,7 +346,6 @@ selectMes.innerHTML = MESES.map((m, i) => `<option value="${i + 1}">${m}</option
 const anios = [];
 for (let a = hoy.getFullYear(); a >= hoy.getFullYear() - 4; a--) anios.push(a);
 selectAnio.innerHTML = anios.map((a) => `<option value="${a}">${a}</option>`).join("");
-
 function abrirSheetMes() {
   selectMes.value = mesActual;
   selectAnio.value = anioActual;
@@ -365,6 +365,7 @@ btnVerMes.addEventListener("click", () => {
   cerrarSheetMes();
   cargarGastos();
 });
+
 function abrirSheet() {
   esCajaMenorCheckbox.checked = false;
   campoTrabajadorCaja.style.display = "none";
@@ -446,6 +447,7 @@ async function cargarObras() {
     // sin conexion: los selects quedan solo con la opcion de agregar nueva
   }
 }
+
 // ---------- Caja menor ----------
 
 function abrirEdicion(id, opts) {
@@ -499,6 +501,7 @@ function renderLista(gastos) {
     </div>`;
   }).join("");
 }
+
 async function cargarGastos() {
   try {
     btnMes.textContent = "Cargando...";
@@ -509,7 +512,6 @@ async function cargarGastos() {
     document.getElementById("lista").innerHTML = '<div class="card empty">No se pudo cargar la lista. Revisa tu conexión.</div>';
   }
 }
-
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const descripcion = document.getElementById("descripcion").value.trim();
@@ -535,6 +537,7 @@ form.addEventListener("submit", async (e) => {
   fd.append("obra", obra);
   fd.append("trabajador", trabajador);
   fd.append("foto", file);
+
   try {
     const res = await fetch(API_BASE + "/api/gastos", { method: "POST", body: fd });
     const data = await res.json();
@@ -580,6 +583,7 @@ formEdit.addEventListener("submit", async (e) => {
     statusEdit.textContent = "Error: " + err.message;
   }
 });
+
 // ---------- Caja menor: administracion ----------
 
 function abrirSheetCaja() {
@@ -614,6 +618,19 @@ function renderTrabajadores_() {
     }
     const historialCerrado = (t.historial || []).filter((h) => !h.activa);
     const historialHtml = historialCerrado.length
+      ? `<div class="historial">Historial: ${historialCerrado.map((h) => `${(h.fecha || "").slice(0, 10)} — ${fmt.format(h.valorEntregado)} (gastado ${fmt.format(h.consumido)})`).join(" · ")}</div>`
+      : "";
+    const nombreEscapado = t.nombre.replace(/'/g, "\\'");
+    return `
+    <div class="trabajador-row">
+      <div class="nombre">${t.nombre}</div>
+      ${infoHtml}
+      ${barraHtml}
+      ${historialHtml}
+      <button type="button" class="btn-mini" onclick="abrirNuevaCaja('${nombreEscapado}', ${c ? "true" : "false"})">💵 ${c ? "Dar nueva caja menor" : "Dar caja menor"}</button>
+    </div>`;
+  }).join("");
+}
 async function cargarTrabajadores() {
   try {
     const res = await fetch(API_BASE + "/api/trabajadores");
@@ -648,7 +665,6 @@ btnAgregarTrabajador.addEventListener("click", async () => {
     statusTrabajador.textContent = "Error: " + err.message;
   }
 });
-
 function abrirNuevaCaja(nombre, tieneCajaActiva) {
   nuevaCajaTrabajadorTexto.value = nombre;
   nuevaCajaValor.value = "";
@@ -701,17 +717,3 @@ cargarTrabajadores();
 </script>
 </body>
 </html>
-
-      ? `<div class="historial">Historial: ${historialCerrado.map((h) => `${(h.fecha || "").slice(0, 10)} — ${fmt.format(h.valorEntregado)} (gastado ${fmt.format(h.consumido)})`).join(" · ")}</div>`
-      : "";
-    const nombreEscapado = t.nombre.replace(/'/g, "\\'");
-    return `
-    <div class="trabajador-row">
-      <div class="nombre">${t.nombre}</div>
-      ${infoHtml}
-      ${barraHtml}
-      ${historialHtml}
-      <button type="button" class="btn-mini" onclick="abrirNuevaCaja('${nombreEscapado}', ${c ? "true" : "false"})">💵 ${c ? "Dar nueva caja menor" : "Dar caja menor"}</button>
-    </div>`;
-  }).join("");
-}
