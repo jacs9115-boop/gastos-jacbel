@@ -3,7 +3,7 @@ var FOLDER_ID = "1D8FpmwzMobg4z6_6tYFuaPEqSAWYy730";
 
 // Columnas de la hoja "Gastos" (primera hoja): A Fecha, B Descripcion, C Comercio,
 // D Categoria, E Valor, F Estado, G (sin uso, antes Notas), H Foto, I Foto URL, J Registrado,
-// K Obra, L ID, M NIT, N Trabajador (caja menor), O CajaMenorId, P IVA
+// K Obra, L ID, M NIT, N Trabajador (caja menor), O CajaMenorId, P IVA, Q Tipo (Gasto|Ingreso)
 
 function doPost(e) {
   try {
@@ -44,15 +44,21 @@ function crearGasto_(body) {
   var estado = body.estado || "Pendiente revision";
   var trabajador = body.trabajador || "";
   var iva = body.iva || "";
+  var tipo = body.tipo === "Ingreso" ? "Ingreso" : "Gasto";
 
-  var folder = DriveApp.getFolderById(FOLDER_ID);
-  var decoded = Utilities.base64Decode(body.fotoBase64);
-  var blob = Utilities.newBlob(decoded, body.fotoMimeType, body.fotoNombre);
-  var file = folder.createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  var fileId = file.getId();
-  var thumbnailUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w800";
-  var viewUrl = "https://drive.google.com/file/d/" + fileId + "/view";
+  var thumbnailFormula = "";
+  var viewUrl = "";
+  if (body.fotoBase64) {
+    var folder = DriveApp.getFolderById(FOLDER_ID);
+    var decoded = Utilities.base64Decode(body.fotoBase64);
+    var blob = Utilities.newBlob(decoded, body.fotoMimeType, body.fotoNombre);
+    var file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    var fileId = file.getId();
+    var thumbnailUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w800";
+    thumbnailFormula = '=IMAGE("' + thumbnailUrl + '")';
+    viewUrl = "https://drive.google.com/file/d/" + fileId + "/view";
+  }
   var id = Utilities.getUuid();
 
   var cajaMenorId = "";
@@ -64,14 +70,14 @@ function crearGasto_(body) {
   var sheet = hojaGastos_();
   sheet.appendRow([
     fecha, descripcion, comercio, categoria, valor, estado, notas,
-    '=IMAGE("' + thumbnailUrl + '")', viewUrl, new Date().toISOString(), obra, id, nit,
-    trabajador, cajaMenorId, iva,
+    thumbnailFormula, viewUrl, new Date().toISOString(), obra, id, nit,
+    trabajador, cajaMenorId, iva, tipo,
   ]);
 
   return jsonOutput_({
     ok: true, id: id, fecha: fecha, descripcion: descripcion, comercio: comercio,
     categoria: categoria, valor: valor, obra: obra, nit: nit, fotoUrl: viewUrl,
-    estado: estado, trabajador: trabajador, iva: iva,
+    estado: estado, trabajador: trabajador, iva: iva, tipo: tipo,
   });
 }
 
@@ -133,6 +139,9 @@ function doGet(e) {
     if (e.parameter.trabajadores === "1") {
       return jsonOutput_(obtenerTrabajadoresConCajas_());
     }
+    if (e.parameter.balancePorObra === "1") {
+      return jsonOutput_(obtenerBalancePorObra_());
+    }
     if (e.parameter.trabajadorCaja) {
       var nombreTrab = e.parameter.trabajadorCaja;
       var sheetCajas = hojaCajasMenores_();
@@ -153,6 +162,7 @@ function doGet(e) {
       hasta: e.parameter.hasta || "",
       obras: e.parameter.obra ? e.parameter.obra.split(",").filter(Boolean) : [],
       trabajadores: e.parameter.trabajador ? e.parameter.trabajador.split(",").filter(Boolean) : [],
+      tipos: e.parameter.tipo ? e.parameter.tipo.split(",").filter(Boolean) : [],
     };
     // Compatibilidad con el modo viejo mes/anio (ya no lo usa el frontend, pero no rompe si llega).
     if (!filtros.desde && !filtros.hasta && e.parameter.mes && e.parameter.anio) {
@@ -181,12 +191,13 @@ function obtenerGastosFiltrados_(filtros) {
   var totalFilas = lastRow - 1;
   var numFilas = Math.min(totalFilas, TOPE_SEGURIDAD);
   var startRow = lastRow - numFilas + 1;
-  var values = sheet.getRange(startRow, 1, numFilas, 16).getValues();
+  var values = sheet.getRange(startRow, 1, numFilas, 17).getValues();
 
   var desde = filtros.desde || "";
   var hasta = filtros.hasta || "";
   var obras = filtros.obras || [];
   var trabajadores = filtros.trabajadores || [];
+  var tipos = filtros.tipos || [];
 
   var gastos = [];
   values.forEach(function (r) {
@@ -201,6 +212,7 @@ function obtenerGastosFiltrados_(filtros) {
       var coincideNombre = trabajadorFila && trabajadores.indexOf(trabajadorFila) !== -1;
       if (!esSinCaja && !coincideNombre) return;
     }
+    if (tipos.length && tipos.indexOf(r[16] || "Gasto") === -1) return;
     gastos.push(filaAGasto_(r));
   });
   gastos.reverse(); // mas reciente agregado primero
@@ -222,6 +234,7 @@ function filaAGasto_(r) {
     fecha: r[0], descripcion: r[1], comercio: r[2], categoria: r[3],
     valor: r[4], estado: r[5], fotoUrl: r[8], obra: r[10], id: r[11],
     nit: r[12], trabajador: r[13] || "", cajaMenorId: r[14] || "", iva: r[15] || "",
+    tipo: r[16] || "Gasto",
   };
 }
 
@@ -238,6 +251,42 @@ function obtenerObras_() {
   });
   lista.sort();
   return lista;
+}
+
+// Agrupa por obra el total ingresado y el total gastado (segun columna Tipo),
+// usando obtenerObras_() como base para no perder obras sin movimientos aun.
+function obtenerBalancePorObra_() {
+  var obras = obtenerObras_();
+  var balances = {};
+  obras.forEach(function (o) {
+    balances[o] = { obra: o, totalIngreso: 0, totalGasto: 0 };
+  });
+
+  var sheet = hojaGastos_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    var values = sheet.getRange(2, 1, lastRow - 1, 17).getValues();
+    values.forEach(function (r) {
+      var obra = r[10];
+      if (!obra) return;
+      if (!balances[obra]) balances[obra] = { obra: obra, totalIngreso: 0, totalGasto: 0 };
+      var tipo = r[16] || "Gasto";
+      var valor = Number(r[4]) || 0;
+      if (tipo === "Ingreso") {
+        balances[obra].totalIngreso += valor;
+      } else {
+        balances[obra].totalGasto += valor;
+      }
+    });
+  }
+
+  return Object.keys(balances).sort().map(function (o) {
+    var b = balances[o];
+    return {
+      obra: b.obra, totalIngreso: b.totalIngreso, totalGasto: b.totalGasto,
+      balance: b.totalIngreso - b.totalGasto,
+    };
+  });
 }
 
 // ---------- Caja menor ----------
@@ -407,7 +456,11 @@ function obtenerTrabajadoresConCajas_() {
 // ---------- Utilidades de hojas ----------
 
 function hojaGastos_() {
-  return SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  if (sheet.getLastColumn() < 17) {
+    sheet.getRange(1, 17).setValue("Tipo");
+  }
+  return sheet;
 }
 
 function obtenerOCrearHoja_(nombre, encabezados) {
