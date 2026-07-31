@@ -425,7 +425,7 @@ app.get("/api/informe-pdf", async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${nombreArchivo}"`);
 
-    const doc = new PDFDocument({ margin: 40, size: "A4" });
+    const doc = new PDFDocument({ margin: 40, size: "A4", layout: "landscape" });
     doc.pipe(res);
     const left = doc.page.margins.left;
     const usableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
@@ -443,16 +443,16 @@ app.get("/api/informe-pdf", async (req, res) => {
       .text(subtitulo, textoX, doc.y, { width: usableWidth - (textoX - left) });
     doc.y = Math.max(doc.y, headerTop + 56) + 20;
 
-    // ---- Tarjetas de metricas (2x2) ----
+    // ---- Tarjetas de metricas (1x4, aprovechando el ancho horizontal) ----
     const gap = 12;
-    const cardW = (usableWidth - gap) / 2;
+    const cardW = (usableWidth - gap * 3) / 4;
     const cardH = 68;
     const cardsTop = doc.y;
     dibujarTarjetaMetrica_(doc, left, cardsTop, cardW, cardH, "Total gastado", fmtCOP_(totalGastado));
-    dibujarTarjetaMetrica_(doc, left + cardW + gap, cardsTop, cardW, cardH, "Cantidad de gastos", String(cantidadGastos));
-    dibujarTarjetaMetrica_(doc, left, cardsTop + cardH + gap, cardW, cardH, "Promedio por gasto", fmtCOP_(promedio));
-    dibujarTarjetaMetrica_(doc, left + cardW + gap, cardsTop + cardH + gap, cardW, cardH, "IVA recuperable", fmtCOP_(totalIva));
-    doc.y = cardsTop + cardH * 2 + gap + 18;
+    dibujarTarjetaMetrica_(doc, left + (cardW + gap), cardsTop, cardW, cardH, "Cantidad de gastos", String(cantidadGastos));
+    dibujarTarjetaMetrica_(doc, left + (cardW + gap) * 2, cardsTop, cardW, cardH, "Promedio por gasto", fmtCOP_(promedio));
+    dibujarTarjetaMetrica_(doc, left + (cardW + gap) * 3, cardsTop, cardW, cardH, "IVA recuperable", fmtCOP_(totalIva));
+    doc.y = cardsTop + cardH + 18;
     doc.x = left;
     if (sinIvaCount > 0) {
       doc.fillColor(INFORME_COLOR_MUTED).fontSize(8).font("Helvetica")
@@ -463,12 +463,12 @@ app.get("/api/informe-pdf", async (req, res) => {
 
     // ---- Tabla resumen ----
     const columnas = [
-      { titulo: "Fecha", width: 50 },
-      { titulo: "Proveedor", width: 105 },
-      { titulo: "NIT", width: 75 },
-      { titulo: "Categoria", width: 70 },
-      { titulo: "Descripcion", width: 140 },
-      { titulo: "Monto", width: 75, align: "right" },
+      { titulo: "Fecha", width: 60 },
+      { titulo: "Proveedor", width: 170 },
+      { titulo: "NIT", width: 95 },
+      { titulo: "Categoria", width: 90 },
+      { titulo: "Descripcion", width: 250 },
+      { titulo: "Monto", width: 90, align: "right" },
     ];
     const rowH = 20;
 
@@ -478,7 +478,7 @@ app.get("/api/informe-pdf", async (req, res) => {
       let x = left;
       doc.fontSize(9).font("Helvetica-Bold").fillColor("#FFFFFF");
       columnas.forEach((c) => {
-        doc.text(c.titulo, x + 6, y + 6, { width: c.width - 10, align: c.align || "left" });
+        doc.text(c.titulo, x + 6, y + 6, { width: c.width - 10, height: rowH - 10, align: c.align || "left", ellipsis: true });
         x += c.width;
       });
       doc.y = y + rowH;
@@ -514,7 +514,7 @@ app.get("/api/informe-pdf", async (req, res) => {
         fmtCOP_(g.valor),
       ];
       columnas.forEach((c, ci) => {
-        doc.text(celdas[ci], x + 6, y + 6, { width: c.width - 10, align: c.align || "left", ellipsis: true });
+        doc.text(celdas[ci], x + 6, y + 6, { width: c.width - 10, height: rowH - 10, align: c.align || "left", ellipsis: true });
         x += c.width;
       });
       doc.y = y + rowH;
@@ -524,6 +524,7 @@ app.get("/api/informe-pdf", async (req, res) => {
     // ---- Anexo de facturas ----
     const gastosConFoto = gastos.filter((g) => g.fotoUrl);
     const imagenes = await Promise.all(gastosConFoto.map((g) => descargarImagenDrive_(g.fotoUrl)));
+    const alturaDisponibleAnexo = doc.page.height - doc.page.margins.top - doc.page.margins.bottom - 30;
     gastosConFoto.forEach((g, i) => {
       const buffer = imagenes[i];
       if (!buffer) return;
@@ -532,7 +533,7 @@ app.get("/api/informe-pdf", async (req, res) => {
         .text(`Anexo: ${fmtFechaCorta_(g.fecha)} — ${g.comercio || "Sin nombre"} — ${fmtCOP_(g.valor)}`,
           left, doc.page.margins.top, { width: usableWidth });
       doc.moveDown(0.5);
-      doc.image(buffer, { fit: [usableWidth, 650], align: "center" });
+      doc.image(buffer, { fit: [usableWidth, alturaDisponibleAnexo], align: "center" });
     });
 
     doc.end();
