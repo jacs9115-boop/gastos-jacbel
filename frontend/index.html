@@ -45,8 +45,19 @@
   header .total { font-size: 12px; opacity: 0.9; background: none; border: 1px solid rgba(255,255,255,0.4);
     border-radius: 100px; color: #fff; padding: 6px 12px; font-family: inherit; text-align: right; white-space: nowrap; }
   header .icon-btn { background: none; border: none; color: #fff; font-size: 21px; padding: 4px 6px; }
-  .mes-selectores { display: flex; gap: 10px; }
-  .mes-selectores select { flex: 1; }
+  .informe-bar { padding: 14px 14px 0; max-width: 560px; margin: 0 auto; }
+  .filtro-resumen { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+  .filtro-seccion { margin-bottom: 16px; }
+  .filtro-seccion .titulo-seccion { display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+  .filtro-seccion .titulo-seccion button { background: none; border: none; color: var(--navy);
+    font-weight: 600; font-size: 12px; padding: 0; font-family: inherit; }
+  .filtro-lista { max-height: 160px; overflow-y: auto; border: 1px solid var(--border);
+    border-radius: 10px; padding: 4px 12px; background: var(--card); }
+  .filtro-item { padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .filtro-item:last-child { border-bottom: none; }
+  .filtro-fechas { display: flex; gap: 10px; }
+  .filtro-fechas .field { flex: 1; }
   main { padding: 14px; max-width: 560px; margin: 0 auto; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
     padding: 14px 16px; margin-bottom: 12px; }
@@ -148,6 +159,12 @@
   </div>
 </header>
 
+<div class="informe-bar" id="informeBar" style="display:none">
+  <div class="filtro-resumen" id="filtroResumen"></div>
+  <button type="button" class="btn-primary" id="btnGenerarInforme" style="margin-top:0;">📄 Generar Informe PDF</button>
+  <div class="status" id="statusInforme"></div>
+</div>
+
 <main id="lista">
   <div class="empty">Cargando gastos...</div>
 </main>
@@ -155,6 +172,7 @@
 <button class="fab" id="btnAbrir" aria-label="Agregar gasto">+</button>
 
 <div class="sheet-overlay" id="overlay"></div>
+
 <div class="sheet" id="sheet">
   <h2>Nuevo gasto</h2>
   <form id="form">
@@ -193,28 +211,49 @@
 <div class="sheet-overlay" id="overlayMes"></div>
 
 <div class="sheet" id="sheetMes">
-  <h2>Ver gastos de otro periodo</h2>
-  <div class="field">
-    <label for="selectMes">Mes y año</label>
-    <div class="mes-selectores">
-      <select id="selectMes"></select>
-      <select id="selectAnio"></select>
+  <h2>Filtrar gastos</h2>
+
+  <div class="filtro-seccion">
+    <div class="titulo-seccion">
+      <span>🏗️ Obra</span>
+      <button type="button" id="btnLimpiarObras">Limpiar</button>
+    </div>
+    <div class="filtro-lista" id="filtroObrasLista"></div>
+  </div>
+
+  <div class="filtro-seccion">
+    <div class="titulo-seccion">
+      <span>👛 Quién lo gastó (caja menor)</span>
+      <button type="button" id="btnLimpiarTrabajadores">Limpiar</button>
+    </div>
+    <div class="filtro-lista" id="filtroTrabajadoresLista">
+      <label class="checkbox-row filtro-item" for="chkSinCaja">
+        <input type="checkbox" id="chkSinCaja" />
+        <span>Sin caja menor (gasto directo)</span>
+      </label>
     </div>
   </div>
-  <button type="button" class="btn-primary" id="btnVerMes">Ver mes</button>
-  <div class="separador-o">— o elige un rango de fechas —</div>
-  <div class="field">
-    <label for="rangoDesde">Desde</label>
-    <input type="date" id="rangoDesde" />
+
+  <div class="filtro-seccion">
+    <div class="titulo-seccion"><span>📅 Rango de fechas</span></div>
+    <div class="filtro-fechas">
+      <div class="field">
+        <label for="filtroDesde">Desde</label>
+        <input type="date" id="filtroDesde" />
+      </div>
+      <div class="field">
+        <label for="filtroHasta">Hasta</label>
+        <input type="date" id="filtroHasta" />
+      </div>
+    </div>
   </div>
-  <div class="field">
-    <label for="rangoHasta">Hasta</label>
-    <input type="date" id="rangoHasta" />
-  </div>
-  <button type="button" class="btn-primary" id="btnVerRango">Ver rango de fechas</button>
+
+  <button type="button" class="btn-primary" id="btnAplicarFiltros">Aplicar filtros</button>
+  <button type="button" class="btn-secondary" id="btnQuitarFiltros">Quitar todos los filtros (ver todos)</button>
   <div class="status" id="statusMes"></div>
-  <button type="button" class="btn-secondary" id="btnCancelarMes">Cancelar</button>
+  <button type="button" class="btn-secondary" id="btnCancelarMes">Cerrar</button>
 </div>
+
 <div class="sheet-overlay" id="overlayEdit"></div>
 
 <div class="sheet" id="sheetEdit">
@@ -243,6 +282,11 @@
       <input type="number" id="editValor" name="valor" min="0" step="1" />
     </div>
     <div class="field">
+      <label for="editIva">Valor IVA (COP)</label>
+      <input type="number" id="editIva" name="iva" min="0" step="1" placeholder="Déjalo vacío si la factura no discrimina IVA" />
+      <div class="hint">Se usa para calcular el IVA recuperable en el informe. Complétalo si la IA no lo pudo leer.</div>
+    </div>
+    <div class="field">
       <label for="editObra">Obra</label>
       <select id="editObra" name="obra">
         <option value="">Selecciona una obra</option>
@@ -268,6 +312,7 @@
     <div class="status" id="statusEdit"></div>
   </form>
 </div>
+
 <div class="sheet-overlay" id="overlayCaja"></div>
 
 <div class="sheet" id="sheetCaja">
@@ -342,13 +387,20 @@ const overlayMes = document.getElementById("overlayMes");
 const sheetMes = document.getElementById("sheetMes");
 const btnMes = document.getElementById("btnMes");
 const btnCancelarMes = document.getElementById("btnCancelarMes");
-const btnVerMes = document.getElementById("btnVerMes");
-const selectMes = document.getElementById("selectMes");
-const selectAnio = document.getElementById("selectAnio");
-const rangoDesdeInput = document.getElementById("rangoDesde");
-const rangoHastaInput = document.getElementById("rangoHasta");
-const btnVerRango = document.getElementById("btnVerRango");
+const btnAplicarFiltros = document.getElementById("btnAplicarFiltros");
+const btnQuitarFiltros = document.getElementById("btnQuitarFiltros");
+const btnLimpiarObras = document.getElementById("btnLimpiarObras");
+const btnLimpiarTrabajadores = document.getElementById("btnLimpiarTrabajadores");
+const filtroObrasLista = document.getElementById("filtroObrasLista");
+const filtroTrabajadoresLista = document.getElementById("filtroTrabajadoresLista");
+const filtroDesdeInput = document.getElementById("filtroDesde");
+const filtroHastaInput = document.getElementById("filtroHasta");
 const statusMes = document.getElementById("statusMes");
+const informeBar = document.getElementById("informeBar");
+const filtroResumen = document.getElementById("filtroResumen");
+const btnGenerarInforme = document.getElementById("btnGenerarInforme");
+const statusInforme = document.getElementById("statusInforme");
+
 const overlayEdit = document.getElementById("overlayEdit");
 const sheetEdit = document.getElementById("sheetEdit");
 const formEdit = document.getElementById("formEdit");
@@ -391,15 +443,7 @@ let pdfPreviewActual = null; // { blob, nombreArchivo, blobUrl }
 
 editCategoriaSelect.innerHTML = CATEGORIAS.map((c) => `<option value="${c}">${c}</option>`).join("");
 
-const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
-  "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-
 const hoy = new Date();
-let mesActual = hoy.getMonth() + 1;
-let anioActual = hoy.getFullYear();
-let modoRango = false;
-let rangoDesde = "";
-let rangoHasta = "";
 
 function hoyLocal_() {
   const pad = (n) => String(n).padStart(2, "0");
@@ -412,13 +456,83 @@ function formatoFechaCorta_(iso) {
   return `${d}/${m}/${y}`;
 }
 
-selectMes.innerHTML = MESES.map((m, i) => `<option value="${i + 1}">${m}</option>`).join("");
-const anios = [];
-for (let a = hoy.getFullYear(); a >= hoy.getFullYear() - 4; a--) anios.push(a);
-selectAnio.innerHTML = anios.map((a) => `<option value="${a}">${a}</option>`).join("");
+// ---------- Filtro de gastos (tipo Excel: obra + caja menor + rango de fechas, combinables) ----------
+
+let filtros = { obras: [], trabajadores: [], sinCaja: false, desde: "", hasta: "" };
+
+function hayFiltrosActivos_() {
+  return filtros.obras.length > 0 || filtros.trabajadores.length > 0 || filtros.sinCaja
+    || !!(filtros.desde && filtros.hasta);
+}
+
+function contarFiltrosActivos_() {
+  let n = 0;
+  if (filtros.obras.length) n++;
+  if (filtros.trabajadores.length || filtros.sinCaja) n++;
+  if (filtros.desde && filtros.hasta) n++;
+  return n;
+}
+
+function construirResumenFiltros_() {
+  const partes = [];
+  if (filtros.obras.length) partes.push(`Obra: ${filtros.obras.join(", ")}`);
+  const trab = [...filtros.trabajadores];
+  if (filtros.sinCaja) trab.push("Sin caja menor");
+  if (trab.length) partes.push(`Caja menor: ${trab.join(", ")}`);
+  if (filtros.desde && filtros.hasta) {
+    partes.push(`Del ${formatoFechaCorta_(filtros.desde)} al ${formatoFechaCorta_(filtros.hasta)}`);
+  }
+  return partes.join(" · ");
+}
+
+function construirQueryFiltros_() {
+  const params = new URLSearchParams();
+  if (filtros.obras.length) params.set("obra", filtros.obras.join(","));
+  const trab = [...filtros.trabajadores];
+  if (filtros.sinCaja) trab.push("__sin_caja__");
+  if (trab.length) params.set("trabajador", trab.join(","));
+  if (filtros.desde && filtros.hasta) {
+    params.set("desde", filtros.desde);
+    params.set("hasta", filtros.hasta);
+  }
+  return params.toString();
+}
+
+function renderChecklistObras_() {
+  if (!obrasActuales.length) {
+    filtroObrasLista.innerHTML = '<div class="hint">No hay obras registradas todavía.</div>';
+    return;
+  }
+  filtroObrasLista.innerHTML = obrasActuales.map((o, i) => {
+    const checked = filtros.obras.includes(o) ? "checked" : "";
+    const id = "fobra_" + i;
+    return `<label class="checkbox-row filtro-item" for="${id}">
+      <input type="checkbox" id="${id}" value="${o.replace(/"/g, "&quot;")}" ${checked} class="chk-obra" />
+      <span>${o}</span>
+    </label>`;
+  }).join("");
+}
+
+function renderChecklistTrabajadores_() {
+  const extras = trabajadoresActuales.map((t, i) => {
+    const checked = filtros.trabajadores.includes(t.nombre) ? "checked" : "";
+    const id = "ftrab_" + i;
+    return `<label class="checkbox-row filtro-item" for="${id}">
+      <input type="checkbox" id="${id}" value="${t.nombre.replace(/"/g, "&quot;")}" ${checked} class="chk-trabajador" />
+      <span>${t.nombre}</span>
+    </label>`;
+  }).join("");
+  filtroTrabajadoresLista.innerHTML = `<label class="checkbox-row filtro-item" for="chkSinCaja">
+      <input type="checkbox" id="chkSinCaja" ${filtros.sinCaja ? "checked" : ""} />
+      <span>Sin caja menor (gasto directo)</span>
+    </label>` + extras;
+}
+
 function abrirSheetMes() {
-  selectMes.value = mesActual;
-  selectAnio.value = anioActual;
+  renderChecklistObras_();
+  renderChecklistTrabajadores_();
+  filtroDesdeInput.value = filtros.desde;
+  filtroHastaInput.value = filtros.hasta;
   statusMes.textContent = "";
   overlayMes.classList.add("open");
   sheetMes.classList.add("open");
@@ -430,26 +544,63 @@ function cerrarSheetMes() {
 btnMes.addEventListener("click", abrirSheetMes);
 btnCancelarMes.addEventListener("click", cerrarSheetMes);
 overlayMes.addEventListener("click", cerrarSheetMes);
-btnVerMes.addEventListener("click", () => {
-  modoRango = false;
-  mesActual = Number(selectMes.value);
-  anioActual = Number(selectAnio.value);
+
+btnLimpiarObras.addEventListener("click", () => {
+  filtroObrasLista.querySelectorAll(".chk-obra").forEach((cb) => { cb.checked = false; });
+});
+btnLimpiarTrabajadores.addEventListener("click", () => {
+  filtroTrabajadoresLista.querySelectorAll(".chk-trabajador").forEach((cb) => { cb.checked = false; });
+  document.getElementById("chkSinCaja").checked = false;
+});
+
+btnAplicarFiltros.addEventListener("click", () => {
+  const desde = filtroDesdeInput.value;
+  const hasta = filtroHastaInput.value;
+  if ((desde && !hasta) || (!desde && hasta)) {
+    statusMes.textContent = "Escoge tanto 'desde' como 'hasta', o deja ambas vacías.";
+    return;
+  }
+  if (desde && hasta && desde > hasta) {
+    statusMes.textContent = "La fecha 'desde' no puede ser posterior a 'hasta'.";
+    return;
+  }
+  filtros = {
+    obras: [...filtroObrasLista.querySelectorAll(".chk-obra:checked")].map((cb) => cb.value),
+    trabajadores: [...filtroTrabajadoresLista.querySelectorAll(".chk-trabajador:checked")].map((cb) => cb.value),
+    sinCaja: document.getElementById("chkSinCaja").checked,
+    desde, hasta,
+  };
+  statusMes.textContent = "";
   cerrarSheetMes();
   cargarGastos();
 });
 
-btnVerRango.addEventListener("click", () => {
-  const desde = rangoDesdeInput.value;
-  const hasta = rangoHastaInput.value;
-  if (!desde || !hasta) { statusMes.textContent = "Escoge la fecha desde y hasta."; return; }
-  if (desde > hasta) { statusMes.textContent = "La fecha 'desde' no puede ser posterior a 'hasta'."; return; }
-  statusMes.textContent = "";
-  modoRango = true;
-  rangoDesde = desde;
-  rangoHasta = hasta;
+btnQuitarFiltros.addEventListener("click", () => {
+  filtros = { obras: [], trabajadores: [], sinCaja: false, desde: "", hasta: "" };
   cerrarSheetMes();
   cargarGastos();
 });
+
+async function generarInformePDF_() {
+  btnGenerarInforme.disabled = true;
+  statusInforme.innerHTML = '<span class="spinner"></span> Generando informe...';
+  try {
+    const qs = construirQueryFiltros_();
+    const res = await fetch(`${API_BASE}/api/informe-pdf${qs ? "?" + qs : ""}`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "No se pudo generar el informe");
+    }
+    const blob = await res.blob();
+    statusInforme.textContent = "";
+    abrirPdfPreview_(blob, `informe-gastos-jacbel-${hoyLocal_()}.pdf`, "Informe Ejecutivo de Gastos JACBEL");
+  } catch (err) {
+    statusInforme.textContent = "Error: " + err.message;
+  } finally {
+    btnGenerarInforme.disabled = false;
+  }
+}
+btnGenerarInforme.addEventListener("click", generarInformePDF_);
 
 function abrirSheet() {
   esCajaMenorCheckbox.checked = false;
@@ -503,6 +654,7 @@ const fmt = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP",
 
 let gastosActuales = [];
 let trabajadoresActuales = [];
+
 // ---------- Selector de obra (seleccionar o agregar nueva) ----------
 
 let obrasActuales = [];
@@ -534,6 +686,7 @@ async function cargarObras() {
     obrasActuales = Array.isArray(data) ? data : [];
     poblarSelectObra_(obraSelect);
     poblarSelectObra_(editObraSelect);
+    if (sheetMes.classList.contains("open")) renderChecklistObras_();
   } catch (e) {
     // sin conexion: los selects quedan solo con la opcion de agregar nueva
   }
@@ -549,6 +702,7 @@ function abrirEdicion(id, opts) {
   document.getElementById("editNit").value = g.nit || "";
   document.getElementById("editCategoria").value = CATEGORIAS.includes(g.categoria) ? g.categoria : "Otros";
   document.getElementById("editValor").value = g.valor || 0;
+  document.getElementById("editIva").value = g.iva || "";
   poblarSelectObra_(editObraSelect, g.obra || "");
   document.getElementById("editDescripcion").value = g.descripcion || "";
   const tieneCaja = !!g.trabajador;
@@ -563,25 +717,25 @@ function abrirEdicion(id, opts) {
   sheetEdit.classList.add("open");
 }
 window.abrirEdicion = abrirEdicion;
+
 function renderLista(gastos) {
   gastosActuales = gastos;
   const main = document.getElementById("lista");
 
   const totalMes = gastos.reduce((sum, g) => sum + (g.valor || 0), 0);
-  let etiqueta, mensajeVacio;
-  if (modoRango) {
-    etiqueta = `Del ${formatoFechaCorta_(rangoDesde)} al ${formatoFechaCorta_(rangoHasta)}`;
-    mensajeVacio = `No hay gastos registrados entre el ${formatoFechaCorta_(rangoDesde)} y el ${formatoFechaCorta_(rangoHasta)}.`;
-  } else {
-    const nombreMes = MESES[mesActual - 1];
-    const esMesActual = mesActual === (hoy.getMonth() + 1) && anioActual === hoy.getFullYear();
-    etiqueta = esMesActual ? "Este mes" : nombreMes + " " + anioActual;
-    mensajeVacio = `No hay gastos registrados en ${nombreMes} ${anioActual}.`;
-  }
+  const activos = hayFiltrosActivos_();
+  const etiqueta = activos ? `Filtrado (${contarFiltrosActivos_()})` : "Todos";
   btnMes.innerHTML = `${etiqueta}: ${fmt.format(totalMes)} ▾`;
 
+  informeBar.style.display = activos ? "block" : "none";
+  filtroResumen.textContent = activos ? construirResumenFiltros_() : "";
+
   if (!gastos.length) {
-    main.innerHTML = `<div class="card empty">${mensajeVacio}<br/>Toca el botón + para agregar uno, o el total de arriba para ver otro periodo.</div>`;
+    const mensajeVacio = activos
+      ? "No hay gastos que coincidan con los filtros aplicados."
+      : "Todavía no hay gastos registrados.";
+    const sugerencia = activos ? "quita los filtros de arriba" : "toca el botón + para agregar el primero";
+    main.innerHTML = `<div class="card empty">${mensajeVacio}<br/>Toca el total de arriba y ${sugerencia}.</div>`;
     return;
   }
 
@@ -609,9 +763,8 @@ function renderLista(gastos) {
 async function cargarGastos() {
   try {
     btnMes.textContent = "Cargando...";
-    const url = modoRango
-      ? `${API_BASE}/api/gastos?desde=${rangoDesde}&hasta=${rangoHasta}`
-      : `${API_BASE}/api/gastos?mes=${mesActual}&anio=${anioActual}`;
+    const qs = construirQueryFiltros_();
+    const url = `${API_BASE}/api/gastos${qs ? "?" + qs : ""}`;
     const res = await fetch(url);
     const data = await res.json();
     renderLista(data);
@@ -619,6 +772,7 @@ async function cargarGastos() {
     document.getElementById("lista").innerHTML = '<div class="card empty">No se pudo cargar la lista. Revisa tu conexión.</div>';
   }
 }
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const descripcion = document.getElementById("descripcion").value.trim();
@@ -680,6 +834,7 @@ formEdit.addEventListener("submit", async (e) => {
     nit: document.getElementById("editNit").value.trim(),
     categoria: document.getElementById("editCategoria").value,
     valor: Number(document.getElementById("editValor").value) || 0,
+    iva: Number(document.getElementById("editIva").value) || "",
     obra: editObraSelect.value === "__nueva__" ? "" : editObraSelect.value,
     descripcion: document.getElementById("editDescripcion").value.trim(),
     trabajador,
@@ -715,6 +870,7 @@ btnEliminarEdit.addEventListener("click", async () => {
     statusEdit.textContent = "Error: " + err.message;
   }
 });
+
 // ---------- Caja menor: administracion ----------
 
 function abrirSheetCaja() {
@@ -769,12 +925,14 @@ function renderTrabajadores_() {
     </div>`;
   }).join("");
 }
+
 async function cargarTrabajadores() {
   try {
     const res = await fetch(API_BASE + "/api/trabajadores");
     const data = await res.json();
     trabajadoresActuales = Array.isArray(data) ? data : [];
     renderTrabajadores_();
+    if (sheetMes.classList.contains("open")) renderChecklistTrabajadores_();
     const conCaja = trabajadoresActuales.filter((t) => t.cajaActiva);
     const opcionesHtml = conCaja.length
       ? conCaja.map((t) => `<option value="${t.nombre}">${t.nombre} (resta ${fmt.format(t.cajaActiva.restante)})</option>`).join("")
@@ -807,6 +965,7 @@ btnAgregarTrabajador.addEventListener("click", async () => {
     statusTrabajador.textContent = "Error: " + err.message;
   }
 });
+
 function abrirNuevaCaja(nombre) {
   const t = trabajadoresActuales.find((x) => x.nombre === nombre);
   const c = t && t.cajaActiva;
@@ -856,6 +1015,7 @@ btnGuardarNuevaCaja.addEventListener("click", async () => {
     statusNuevaCaja.textContent = "Error: " + err.message;
   }
 });
+
 // ---------- Reporte PDF de caja menor ----------
 
 async function compartirOGuardarPDF_(blob, nombreArchivo, tituloCompartir) {
@@ -886,9 +1046,9 @@ function descargarPDF_(blob, nombreArchivo) {
   setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
 }
 
-function abrirPdfPreview_(blob, nombreArchivo) {
+function abrirPdfPreview_(blob, nombreArchivo, titulo) {
   const blobUrl = URL.createObjectURL(blob);
-  pdfPreviewActual = { blob, nombreArchivo, blobUrl };
+  pdfPreviewActual = { blob, nombreArchivo, blobUrl, titulo: titulo || "Reporte" };
   pdfPreviewFrame.src = blobUrl;
   pdfPreview.classList.add("open");
 }
@@ -907,7 +1067,7 @@ btnDescargarPreview.addEventListener("click", () => {
 });
 btnCompartirPreview.addEventListener("click", async () => {
   if (!pdfPreviewActual) return;
-  await compartirOGuardarPDF_(pdfPreviewActual.blob, pdfPreviewActual.nombreArchivo, "Reporte de caja menor");
+  await compartirOGuardarPDF_(pdfPreviewActual.blob, pdfPreviewActual.nombreArchivo, pdfPreviewActual.titulo);
 });
 
 async function abrirReporteCaja(nombre, cajaId) {
@@ -920,7 +1080,7 @@ async function abrirReporteCaja(nombre, cajaId) {
     }
     const blob = await res.blob();
     statusTrabajador.textContent = "";
-    abrirPdfPreview_(blob, `caja-menor-${nombre.replace(/[^a-zA-Z0-9._-]+/g, "_")}.pdf`);
+    abrirPdfPreview_(blob, `caja-menor-${nombre.replace(/[^a-zA-Z0-9._-]+/g, "_")}.pdf`, "Reporte de caja menor");
   } catch (err) {
     statusTrabajador.textContent = "Error: " + err.message;
   }
