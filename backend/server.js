@@ -290,6 +290,23 @@ app.put("/api/caja-menor/:id", async (req, res) => {
   }
 });
 
+app.delete("/api/caja-menor/:id", async (req, res) => {
+  try {
+    requireAppsScriptUrl();
+    const scriptRes = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accion: "eliminar_caja_menor", id: req.params.id }),
+    });
+    const data = await scriptRes.json();
+    if (!data.ok) return res.status(400).json({ error: data.error || "Error al eliminar la caja menor" });
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Error inesperado" });
+  }
+});
+
 app.get("/api/trabajadores/:nombre/caja-menor-pdf", async (req, res) => {
   try {
     requireAppsScriptUrl();
