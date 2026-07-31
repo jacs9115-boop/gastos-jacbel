@@ -23,6 +23,9 @@ function doPost(e) {
     if (body.accion === "editar_caja_menor") {
       return editarCajaMenor_(body);
     }
+    if (body.accion === "eliminar_caja_menor") {
+      return eliminarCajaMenor_(body);
+    }
     return crearGasto_(body);
   } catch (err) {
     return jsonOutput_({ ok: false, error: String(err) });
@@ -302,6 +305,22 @@ function editarCajaMenor_(body) {
   sheet.getRange(rowIndex, 7).setValue(body.obra || "");
 
   return jsonOutput_({ ok: true, id: body.id });
+}
+
+function eliminarCajaMenor_(body) {
+  var sheet = hojaCajasMenores_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return jsonOutput_({ ok: false, error: "No hay cajas menores registradas" });
+
+  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  var rowIndex = -1;
+  for (var i = 0; i < ids.length; i++) {
+    if (ids[i][0] === body.id) { rowIndex = i + 2; break; }
+  }
+  if (rowIndex === -1) return jsonOutput_({ ok: false, error: "No se encontro la caja menor a eliminar" });
+
+  sheet.deleteRow(rowIndex);
+  return jsonOutput_({ ok: true });
 }
 
 function cajaActivaDeTrabajador_(trabajador) {
