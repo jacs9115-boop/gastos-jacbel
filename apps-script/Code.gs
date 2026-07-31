@@ -20,6 +20,9 @@ function doPost(e) {
     if (body.accion === "crear_caja_menor") {
       return crearCajaMenor_(body);
     }
+    if (body.accion === "editar_caja_menor") {
+      return editarCajaMenor_(body);
+    }
     return crearGasto_(body);
   } catch (err) {
     return jsonOutput_({ ok: false, error: String(err) });
@@ -127,10 +130,18 @@ function doGet(e) {
     if (e.parameter.trabajadores === "1") {
       return jsonOutput_(obtenerTrabajadoresConCajas_());
     }
-    if (e.parameter.cajaMenorId) {
+    if (e.parameter.trabajadorCaja) {
+      var nombreTrab = e.parameter.trabajadorCaja;
+      var sheetCajas = hojaCajasMenores_();
+      var lastRowCajas = sheetCajas.getLastRow();
+      var todasLasCajas = lastRowCajas >= 2 ? sheetCajas.getRange(2, 1, lastRowCajas - 1, 7).getValues() : [];
+      var historialCajas = historialCajasDeTrabajador_(nombreTrab, todasLasCajas);
+      var totalDado = historialCajas.reduce(function (s, c) { return s + c.valor; }, 0);
+      var totalGastado = consumidoDeTrabajador_(nombreTrab);
       return jsonOutput_({
-        caja: obtenerCajaPorId_(e.parameter.cajaMenorId),
-        gastos: obtenerGastosDeCaja_(e.parameter.cajaMenorId),
+        trabajador: nombreTrab, historialCajas: historialCajas,
+        totalDado: totalDado, totalGastado: totalGastado, restante: totalDado - totalGastado,
+        gastos: obtenerGastosDeTrabajador_(nombreTrab),
       });
     }
 
@@ -250,34 +261,47 @@ function crearCajaMenor_(body) {
   var trabajador = (body.trabajador || "").trim();
   var fecha = body.fecha || "";
   var valor = Number(body.valor) || 0;
+  var obra = body.obra || "";
   if (!trabajador) return jsonOutput_({ ok: false, error: "Falta el trabajador" });
   if (!fecha) return jsonOutput_({ ok: false, error: "Falta la fecha" });
   if (!valor || valor <= 0) return jsonOutput_({ ok: false, error: "El valor debe ser mayor a 0" });
 
-  // Cierra cualquier caja activa anterior de este trabajador; la nueva la reemplaza.
-  // Si esa caja anterior quedo con saldo negativo (se gasto mas de lo entregado),
-  // esa deuda se arrastra y se descuenta del saldo de la nueva caja.
+  // Cierra cualquier caja activa anterior de este trabajador; la nueva la reemplaza
+  // como la caja "abierta" actual. El saldo ya no se arrastra aparte: se calcula
+  // siempre como la suma de todo lo entregado menos la suma de todo lo gastado.
   var sheet = hojaCajasMenores_();
   var lastRow = sheet.getLastRow();
-  var deudaArrastrada = 0;
   if (lastRow >= 2) {
-    var filas = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+    var filas = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
     for (var i = 0; i < filas.length; i++) {
       if (filas[i][1] === trabajador && filas[i][4] === true) {
-        var cajaAnteriorId = filas[i][0];
-        var valorAnterior = Number(filas[i][3]) || 0;
-        var deudaPrevia = Number(filas[i][5]) || 0;
-        var consumidoAnterior = consumidoDeCaja_(cajaAnteriorId);
-        var restanteAnterior = valorAnterior - deudaPrevia - consumidoAnterior;
-        if (restanteAnterior < 0) deudaArrastrada = -restanteAnterior;
         sheet.getRange(i + 2, 5).setValue(false);
       }
     }
   }
 
   var id = Utilities.getUuid();
-  sheet.appendRow([id, trabajador, fecha, valor, true, deudaArrastrada]);
-  return jsonOutput_({ ok: true, id: id, deudaArrastrada: deudaArrastrada });
+  sheet.appendRow([id, trabajador, fecha, valor, true, 0, obra]);
+  return jsonOutput_({ ok: true, id: id });
+}
+
+function editarCajaMenor_(body) {
+  var sheet = hojaCajasMenores_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return jsonOutput_({ ok: false, error: "No hay cajas menores registradas" });
+
+  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  var rowIndex = -1;
+  for (var i = 0; i < ids.length; i++) {
+    if (ids[i][0] === body.id) { rowIndex = i + 2; break; }
+  }
+  if (rowIndex === -1) return jsonOutput_({ ok: false, error: "No se encontro la caja menor a editar" });
+
+  if (body.fecha) sheet.getRange(rowIndex, 3).setValue(body.fecha);
+  if (body.valor !== undefined && body.valor !== "") sheet.getRange(rowIndex, 4).setValue(Number(body.valor) || 0);
+  sheet.getRange(rowIndex, 7).setValue(body.obra || "");
+
+  return jsonOutput_({ ok: true, id: body.id });
 }
 
 function cajaActivaDeTrabajador_(trabajador) {
@@ -293,47 +317,41 @@ function cajaActivaDeTrabajador_(trabajador) {
   return null;
 }
 
-function consumidoDeCaja_(cajaId) {
+// Suma todos los gastos que un trabajador ha reportado por caja menor, sin
+// importar a que caja especifica quedaron asociados (acumulado historico).
+function consumidoDeTrabajador_(trabajador) {
   var sheet = hojaGastos_();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return 0;
   var valores = sheet.getRange(2, 5, lastRow - 1, 1).getValues();
-  var cajaIds = sheet.getRange(2, 15, lastRow - 1, 1).getValues();
+  var trabajadores = sheet.getRange(2, 14, lastRow - 1, 1).getValues();
   var total = 0;
-  for (var i = 0; i < cajaIds.length; i++) {
-    if (cajaIds[i][0] === cajaId) total += Number(valores[i][0]) || 0;
+  for (var i = 0; i < trabajadores.length; i++) {
+    if (trabajadores[i][0] === trabajador) total += Number(valores[i][0]) || 0;
   }
   return total;
 }
 
-function obtenerCajaPorId_(cajaId) {
-  var sheet = hojaCajasMenores_();
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return null;
-  var filas = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
-  for (var i = 0; i < filas.length; i++) {
-    if (filas[i][0] === cajaId) {
-      return {
-        id: filas[i][0], trabajador: filas[i][1], fecha: filas[i][2],
-        valorEntregado: filas[i][3], activa: filas[i][4] === true,
-        deudaArrastrada: Number(filas[i][5]) || 0,
-      };
-    }
-  }
-  return null;
-}
-
-function obtenerGastosDeCaja_(cajaId) {
+function obtenerGastosDeTrabajador_(trabajador) {
   var sheet = hojaGastos_();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
   var values = sheet.getRange(2, 1, lastRow - 1, 16).getValues();
   var gastos = [];
   values.forEach(function (r) {
-    if (r[14] === cajaId) gastos.push(filaAGasto_(r));
+    if (r[13] === trabajador) gastos.push(filaAGasto_(r));
   });
   gastos.sort(function (a, b) { return a.fecha < b.fecha ? -1 : 1; });
   return gastos;
+}
+
+function historialCajasDeTrabajador_(trabajador, todasLasCajas) {
+  return todasLasCajas
+    .filter(function (r) { return r[1] === trabajador; })
+    .map(function (r) {
+      return { id: r[0], fecha: r[2], valor: Number(r[3]) || 0, activa: r[4] === true, obra: r[6] || "" };
+    })
+    .sort(function (a, b) { return a.fecha < b.fecha ? 1 : -1; });
 }
 
 function obtenerTrabajadoresConCajas_() {
@@ -351,24 +369,19 @@ function obtenerTrabajadoresConCajas_() {
   var lastRowCajas = sheetCajas.getLastRow();
   var todasLasCajas = [];
   if (lastRowCajas >= 2) {
-    todasLasCajas = sheetCajas.getRange(2, 1, lastRowCajas - 1, 6).getValues();
+    todasLasCajas = sheetCajas.getRange(2, 1, lastRowCajas - 1, 7).getValues();
   }
 
   return activos.map(function (nombre) {
-    var cajasDelTrabajador = todasLasCajas
-      .filter(function (r) { return r[1] === nombre; })
-      .map(function (r) {
-        var deudaArrastrada = Number(r[5]) || 0;
-        var consumido = consumidoDeCaja_(r[0]);
-        return {
-          id: r[0], fecha: r[2], valorEntregado: r[3], activa: r[4] === true,
-          deudaArrastrada: deudaArrastrada, consumido: consumido,
-          restante: r[3] - deudaArrastrada - consumido,
-        };
-      })
-      .sort(function (a, b) { return a.fecha < b.fecha ? 1 : -1; });
-    var cajaActiva = cajasDelTrabajador.find(function (c) { return c.activa; }) || null;
-    return { nombre: nombre, cajaActiva: cajaActiva, historial: cajasDelTrabajador };
+    var historialCajas = historialCajasDeTrabajador_(nombre, todasLasCajas);
+    var totalDado = historialCajas.reduce(function (s, c) { return s + c.valor; }, 0);
+    var totalGastado = consumidoDeTrabajador_(nombre);
+    var tieneCajaActiva = historialCajas.some(function (c) { return c.activa; });
+    return {
+      nombre: nombre, totalDado: totalDado, totalGastado: totalGastado,
+      restante: totalDado - totalGastado, tieneCajaActiva: tieneCajaActiva,
+      historialCajas: historialCajas,
+    };
   });
 }
 
@@ -394,9 +407,12 @@ function hojaTrabajadores_() {
 }
 
 function hojaCajasMenores_() {
-  var sheet = obtenerOCrearHoja_("CajasMenores", ["Id", "Trabajador", "FechaEntrega", "ValorEntregado", "Activa", "DeudaArrastrada"]);
+  var sheet = obtenerOCrearHoja_("CajasMenores", ["Id", "Trabajador", "FechaEntrega", "ValorEntregado", "Activa", "DeudaArrastrada", "Obra"]);
   if (sheet.getLastColumn() < 6) {
     sheet.getRange(1, 6).setValue("DeudaArrastrada");
+  }
+  if (sheet.getLastColumn() < 7) {
+    sheet.getRange(1, 7).setValue("Obra");
   }
   return sheet;
 }
