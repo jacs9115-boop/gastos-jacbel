@@ -86,8 +86,31 @@ Reglas:
 - Responde SIEMPRE con el JSON completo, incluso si la imagen es dificil de leer (letra manuscrita poco clara, foto borrosa, etc). Nunca respondas con una disculpa ni texto explicando que no puedes leerla: en vez de eso, haz tu mejor estimacion razonable para cada campo, y si de verdad un campo especifico es ilegible, usa "" para textos o 0 para "valor" en ese campo unicamente (no inventes un valor que no puedas sustentar en la imagen o la descripcion).`;
 }
 
-async function leerFacturaConIA_(base64Image, mediaType, descripcion) {
+function construirPromptIngreso_(descripcion) {
+  return `Estas leyendo la foto de un comprobante de consignacion o transferencia bancaria que recibio una empresa colombiana de construccion/ingenieria llamada JACBEL (es decir, dinero que ENTRA a la empresa, no una factura de compra). El usuario escribio esta descripcion del ingreso: "${descripcion || "(sin descripcion)"}".
+
+Extrae del comprobante estos datos y responde UNICAMENTE con un JSON valido, sin texto adicional, con esta forma exacta:
+{
+  "fecha": "YYYY-MM-DD",
+  "comercio": "nombre de la persona o empresa que hizo la consignacion o transferencia, tal como aparece",
+  "nit": "",
+  "valor": 12345,
+  "iva": "",
+  "categoria": "",
+  "descripcion": "concepto o motivo de la consignacion, si aparece en el comprobante"
+}
+
+Reglas:
+- "valor" es el monto consignado en pesos colombianos (COP), como numero entero sin puntos ni comas ni simbolo de moneda.
+- "comercio" es quien hizo la consignacion (nombre de persona o empresa remitente). Muchos comprobantes no traen un nombre identificable: si no aparece ninguno legible, deja este campo como cadena vacia "" (no lo inventes).
+- "nit", "iva" y "categoria" no aplican a un ingreso: deja siempre estos tres campos como cadena vacia "".
+- Si no logras leer la fecha en la foto, usa la fecha de hoy.
+- Responde SIEMPRE con el JSON completo, incluso si la imagen es dificil de leer o borrosa. Nunca respondas con una disculpa ni texto explicando que no puedes leerla: en vez de eso, haz tu mejor estimacion razonable para cada campo, y si un campo especifico es ilegible, usa "" para textos o 0 para "valor" en ese campo unicamente.`;
+}
+
+async function leerFacturaConIA_(base64Image, mediaType, descripcion, tipo) {
   const intentos = [CLAUDE_MODEL, CLAUDE_MODEL_REINTENTO];
+  const prompt = tipo === "Ingreso" ? construirPromptIngreso_(descripcion) : construirPrompt_(descripcion);
   let ultimoExtraido = null;
 
   for (let i = 0; i < intentos.length; i++) {
@@ -100,7 +123,7 @@ async function leerFacturaConIA_(base64Image, mediaType, descripcion) {
             role: "user",
             content: [
               { type: "image", source: { type: "base64", media_type: mediaType, data: base64Image } },
-              { type: "text", text: construirPrompt_(descripcion) },
+              { type: "text", text: prompt },
             ],
           },
         ],
@@ -112,8 +135,10 @@ async function leerFacturaConIA_(base64Image, mediaType, descripcion) {
         ultimoExtraido = extraido;
         const valor = Number(extraido.valor) || 0;
         const comercio = (extraido.comercio || "").trim();
-        // Si logro leer un valor y un comercio, damos el resultado por bueno.
-        if (valor > 0 && comercio) {
+        // Para gasto exigimos comercio legible; para ingreso muchos comprobantes
+        // no traen un remitente identificable, asi que basta con el valor.
+        const completo = tipo === "Ingreso" ? valor > 0 : (valor > 0 && comercio);
+        if (completo) {
           return { extraido, necesitaRevision: false };
         }
       }
@@ -133,48 +158,73 @@ app.post("/api/gastos", upload.single("foto"), async (req, res) => {
     const descripcion = (req.body.descripcion || "").trim();
     const obra = (req.body.obra || "").trim();
     const trabajador = (req.body.trabajador || "").trim();
-    if (!req.file) {
+    const tipo = req.body.tipo === "Ingreso" ? "Ingreso" : "Gasto";
+
+    if (tipo !== "Ingreso" && !req.file) {
       return res.status(400).json({ error: "Falta la foto de la factura" });
     }
 
-    const base64Image = req.file.buffer.toString("base64");
-    const mediaType = req.file.mimetype || "image/jpeg";
+    let extraido = null;
+    let necesitaRevision = false;
+    let base64Image = "";
+    let mediaType = "";
+    if (req.file) {
+      base64Image = req.file.buffer.toString("base64");
+      mediaType = req.file.mimetype || "image/jpeg";
+      const resultado = await leerFacturaConIA_(base64Image, mediaType, descripcion, tipo);
+      extraido = resultado.extraido;
+      necesitaRevision = resultado.necesitaRevision;
+    }
 
-    const { extraido, necesitaRevision } = await leerFacturaConIA_(base64Image, mediaType, descripcion);
-
-    const fechaExtraida = (extraido && extraido.fecha) || "";
     const hoyStr = new Date().toISOString().slice(0, 10);
-    let fecha = fechaExtraida || hoyStr;
+    const fechaExtraida = (extraido && extraido.fecha) || "";
+    let fecha = fechaExtraida || (req.body.fecha || "").trim() || hoyStr;
     let motivoRevision = "";
     if (fechaExtraida && fechaExtraida < FECHA_MINIMA_FACTURAS) {
-      motivoRevision = `La fecha que leyó la IA en la factura (${fechaExtraida}) es anterior a julio de 2026, así que probablemente la lectura fue incorrecta. Verifica y completa la fecha manualmente.`;
+      motivoRevision = `La fecha que leyó la IA (${fechaExtraida}) es anterior a julio de 2026, así que probablemente la lectura fue incorrecta. Verifica y completa la fecha manualmente.`;
       fecha = "";
     } else if (fechaExtraida && fechaExtraida > hoyStr) {
-      motivoRevision = `La fecha que leyó la IA en la factura (${fechaExtraida}) es posterior a hoy, así que probablemente la lectura fue incorrecta. Verifica y completa la fecha manualmente.`;
+      motivoRevision = `La fecha que leyó la IA (${fechaExtraida}) es posterior a hoy, así que probablemente la lectura fue incorrecta. Verifica y completa la fecha manualmente.`;
       fecha = "";
     }
 
-    const comercio = (extraido && extraido.comercio) || "";
-    const nit = (extraido && extraido.nit) || "";
-    const valor = Number(extraido && extraido.valor) || 0;
-    const iva = Number(extraido && extraido.iva) || "";
-    const categoria = extraido && CATEGORIAS.includes(extraido.categoria) ? extraido.categoria : "Otros";
+    let comercio, nit, valor, iva, categoria, estado;
+    if (tipo === "Ingreso") {
+      comercio = (extraido && extraido.comercio) || (req.body.fuente || "").trim();
+      nit = "";
+      valor = Number((extraido && extraido.valor) || req.body.valor) || 0;
+      iva = "";
+      categoria = "";
+      const necesitaRevisionFinal = (necesitaRevision && valor <= 0) || !!motivoRevision;
+      estado = necesitaRevisionFinal ? "No se pudo leer - completar a mano" : "Registrado";
+    } else {
+      comercio = (extraido && extraido.comercio) || "";
+      nit = (extraido && extraido.nit) || "";
+      valor = Number(extraido && extraido.valor) || 0;
+      iva = Number(extraido && extraido.iva) || "";
+      categoria = extraido && CATEGORIAS.includes(extraido.categoria) ? extraido.categoria : "Otros";
+      estado = (necesitaRevision || !!motivoRevision) ? "No se pudo leer - completar a mano" : "Pendiente revision";
+    }
+
     const detalleIA = (extraido && extraido.descripcion) || "";
     const descripcionFinal = [descripcion, detalleIA].filter(Boolean).join(" — ");
-    const necesitaRevisionFinal = necesitaRevision || !!motivoRevision;
-    const estado = necesitaRevisionFinal ? "No se pudo leer - completar a mano" : "Pendiente revision";
+    const necesitaRevisionFinal = estado === "No se pudo leer - completar a mano";
 
-    const extension = mediaType.includes("png") ? "png" : "jpg";
-    const fechaParaArchivo = fecha || hoyStr;
-    const fotoNombre = `${fechaParaArchivo}_${(comercio || "gasto").replace(/[^a-zA-Z0-9._-]+/g, "_")}.${extension}`;
+    const scriptBody = {
+      fecha, descripcion: descripcionFinal, comercio, categoria, valor, iva, obra, nit, estado, trabajador, tipo,
+    };
+    if (req.file) {
+      const extension = mediaType.includes("png") ? "png" : "jpg";
+      const fechaParaArchivo = fecha || hoyStr;
+      scriptBody.fotoBase64 = base64Image;
+      scriptBody.fotoMimeType = mediaType;
+      scriptBody.fotoNombre = `${fechaParaArchivo}_${(comercio || tipo).replace(/[^a-zA-Z0-9._-]+/g, "_")}.${extension}`;
+    }
 
     const scriptRes = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fecha, descripcion: descripcionFinal, comercio, categoria, valor, iva, obra, nit, estado, trabajador,
-        fotoBase64: base64Image, fotoMimeType: mediaType, fotoNombre,
-      }),
+      body: JSON.stringify(scriptBody),
     });
     const scriptData = await scriptRes.json();
     if (!scriptData.ok) {
@@ -189,12 +239,13 @@ app.post("/api/gastos", upload.single("foto"), async (req, res) => {
 });
 
 function construirUrlFiltrada_(baseUrl, query) {
-  const { desde, hasta, obra, trabajador } = query;
+  const { desde, hasta, obra, trabajador, tipo } = query;
   const params = new URLSearchParams();
   if (desde) params.set("desde", desde);
   if (hasta) params.set("hasta", hasta);
   if (obra) params.set("obra", obra);
   if (trabajador) params.set("trabajador", trabajador);
+  if (tipo) params.set("tipo", tipo);
   const qs = params.toString();
   return qs ? `${baseUrl}?${qs}` : baseUrl;
 }
@@ -206,6 +257,18 @@ app.get("/api/gastos", async (req, res) => {
     const scriptRes = await fetch(url);
     const gastos = await scriptRes.json();
     res.json(gastos);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Error inesperado" });
+  }
+});
+
+app.get("/api/balance-por-obra", async (req, res) => {
+  try {
+    requireAppsScriptUrl();
+    const scriptRes = await fetch(`${APPS_SCRIPT_URL}?balancePorObra=1`);
+    const balance = await scriptRes.json();
+    res.json(balance);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message || "Error inesperado" });
@@ -426,10 +489,13 @@ app.get("/api/informe-pdf", async (req, res) => {
       return res.status(502).json({ error: "No se pudo obtener la lista de gastos" });
     }
 
-    const totalGastado = gastos.reduce((s, g) => s + (Number(g.valor) || 0), 0);
-    const cantidadGastos = gastos.length;
-    const promedio = cantidadGastos ? totalGastado / cantidadGastos : 0;
-    const gastosConIva = gastos.filter((g) => Number(g.iva) > 0);
+    const soloGastos = gastos.filter((g) => (g.tipo || "Gasto") !== "Ingreso");
+    const soloIngresos = gastos.filter((g) => g.tipo === "Ingreso");
+    const totalGastado = soloGastos.reduce((s, g) => s + (Number(g.valor) || 0), 0);
+    const totalIngreso = soloIngresos.reduce((s, g) => s + (Number(g.valor) || 0), 0);
+    const disponible = totalIngreso - totalGastado;
+    const cantidadGastos = soloGastos.length;
+    const gastosConIva = soloGastos.filter((g) => Number(g.iva) > 0);
     const totalIva = gastosConIva.reduce((s, g) => s + Number(g.iva), 0);
     const sinIvaCount = cantidadGastos - gastosConIva.length;
 
@@ -465,9 +531,9 @@ app.get("/api/informe-pdf", async (req, res) => {
     const cardW = (usableWidth - gap * 3) / 4;
     const cardH = 68;
     const cardsTop = doc.y;
-    dibujarTarjetaMetrica_(doc, left, cardsTop, cardW, cardH, "Total gastado", fmtCOP_(totalGastado));
-    dibujarTarjetaMetrica_(doc, left + (cardW + gap), cardsTop, cardW, cardH, "Cantidad de gastos", String(cantidadGastos));
-    dibujarTarjetaMetrica_(doc, left + (cardW + gap) * 2, cardsTop, cardW, cardH, "Promedio por gasto", fmtCOP_(promedio));
+    dibujarTarjetaMetrica_(doc, left, cardsTop, cardW, cardH, "Total ingreso", fmtCOP_(totalIngreso));
+    dibujarTarjetaMetrica_(doc, left + (cardW + gap), cardsTop, cardW, cardH, "Total gastado", fmtCOP_(totalGastado));
+    dibujarTarjetaMetrica_(doc, left + (cardW + gap) * 2, cardsTop, cardW, cardH, "Disponible", fmtCOP_(disponible));
     dibujarTarjetaMetrica_(doc, left + (cardW + gap) * 3, cardsTop, cardW, cardH, "IVA recuperable", fmtCOP_(totalIva));
     doc.y = cardsTop + cardH + 18;
     doc.x = left;
@@ -480,12 +546,13 @@ app.get("/api/informe-pdf", async (req, res) => {
 
     // ---- Tabla resumen ----
     const columnas = [
-      { titulo: "Fecha", width: 60 },
-      { titulo: "Proveedor", width: 170 },
-      { titulo: "NIT", width: 95 },
-      { titulo: "Categoria", width: 90 },
-      { titulo: "Descripcion", width: 250 },
-      { titulo: "Monto", width: 90, align: "right" },
+      { titulo: "Fecha", width: 55 },
+      { titulo: "Tipo", width: 55 },
+      { titulo: "Proveedor", width: 150 },
+      { titulo: "NIT", width: 85 },
+      { titulo: "Categoria", width: 80 },
+      { titulo: "Descripcion", width: 220 },
+      { titulo: "Monto", width: 80, align: "right" },
     ];
     const rowH = 20;
 
@@ -524,9 +591,10 @@ app.get("/api/informe-pdf", async (req, res) => {
       doc.fontSize(8.5).font("Helvetica").fillColor(INFORME_COLOR_TEXTO);
       const celdas = [
         fmtFechaCorta_(g.fecha),
+        g.tipo === "Ingreso" ? "Ingreso" : "Gasto",
         g.comercio || "Sin nombre",
         g.nit || "",
-        g.categoria || "Otros",
+        g.categoria || (g.tipo === "Ingreso" ? "" : "Otros"),
         g.descripcion || "",
         fmtCOP_(g.valor),
       ];
