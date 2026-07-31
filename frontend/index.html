@@ -381,6 +381,7 @@
   </div>
   <button type="button" class="btn-primary" id="btnGuardarEditarCaja">Guardar cambios</button>
   <button type="button" class="btn-secondary" id="btnCancelarEditarCaja">Cancelar</button>
+  <button type="button" class="btn-eliminar" id="btnEliminarEditarCaja">🗑️ Eliminar caja menor</button>
   <div class="status" id="statusEditarCaja"></div>
 </div>
 
@@ -474,6 +475,7 @@ const editCajaFecha = document.getElementById("editCajaFecha");
 const editCajaObraSelect = document.getElementById("editCajaObra");
 const btnGuardarEditarCaja = document.getElementById("btnGuardarEditarCaja");
 const btnCancelarEditarCaja = document.getElementById("btnCancelarEditarCaja");
+const btnEliminarEditarCaja = document.getElementById("btnEliminarEditarCaja");
 const statusEditarCaja = document.getElementById("statusEditarCaja");
 
 const pdfPreview = document.getElementById("pdfPreview");
@@ -1089,6 +1091,23 @@ btnGuardarEditarCaja.addEventListener("click", async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Error al guardar los cambios");
     statusEditarCaja.textContent = "Cambios guardados ✓";
+    await cargarTrabajadores();
+    setTimeout(cerrarSheetEditarCaja, 700);
+  } catch (err) {
+    statusEditarCaja.textContent = "Error: " + err.message;
+  }
+});
+
+btnEliminarEditarCaja.addEventListener("click", async () => {
+  const id = sheetEditarCaja.dataset.id;
+  if (!id) return;
+  if (!confirm("¿Seguro que quieres eliminar esta caja menor? Esta acción no se puede deshacer.")) return;
+  statusEditarCaja.innerHTML = '<span class="spinner"></span> Eliminando...';
+  try {
+    const res = await fetch(`${API_BASE}/api/caja-menor/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Error al eliminar la caja menor");
+    statusEditarCaja.textContent = "Caja menor eliminada ✓";
     await cargarTrabajadores();
     setTimeout(cerrarSheetEditarCaja, 700);
   } catch (err) {
