@@ -257,11 +257,11 @@ app.post("/api/trabajadores", async (req, res) => {
 app.post("/api/caja-menor", async (req, res) => {
   try {
     requireAppsScriptUrl();
-    const { trabajador, fecha, valor } = req.body;
+    const { trabajador, fecha, valor, obra } = req.body;
     const scriptRes = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accion: "crear_caja_menor", trabajador, fecha, valor }),
+      body: JSON.stringify({ accion: "crear_caja_menor", trabajador, fecha, valor, obra }),
     });
     const data = await scriptRes.json();
     if (!data.ok) return res.status(400).json({ error: data.error || "Error al crear la caja menor" });
@@ -272,21 +272,36 @@ app.post("/api/caja-menor", async (req, res) => {
   }
 });
 
-app.get("/api/caja-menor/:id/pdf", async (req, res) => {
+app.put("/api/caja-menor/:id", async (req, res) => {
   try {
     requireAppsScriptUrl();
-    const cajaId = req.params.id;
-    const scriptRes = await fetch(`${APPS_SCRIPT_URL}?cajaMenorId=${encodeURIComponent(cajaId)}`);
+    const { valor, fecha, obra } = req.body;
+    const scriptRes = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accion: "editar_caja_menor", id: req.params.id, valor, fecha, obra }),
+    });
     const data = await scriptRes.json();
-    if (!data.caja) {
-      return res.status(404).json({ error: "No se encontro la caja menor" });
+    if (!data.ok) return res.status(400).json({ error: data.error || "Error al editar la caja menor" });
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Error inesperado" });
+  }
+});
+
+app.get("/api/trabajadores/:nombre/caja-menor-pdf", async (req, res) => {
+  try {
+    requireAppsScriptUrl();
+    const nombre = req.params.nombre;
+    const scriptRes = await fetch(`${APPS_SCRIPT_URL}?trabajadorCaja=${encodeURIComponent(nombre)}`);
+    const data = await scriptRes.json();
+    if (!data.trabajador) {
+      return res.status(404).json({ error: "No se encontro informacion de caja menor para ese trabajador" });
     }
 
-    const { caja, gastos } = data;
-    const consumido = gastos.reduce((s, g) => s + (Number(g.valor) || 0), 0);
-    const deudaArrastrada = Number(caja.deudaArrastrada) || 0;
-    const restante = (Number(caja.valorEntregado) || 0) - deudaArrastrada - consumido;
-    const nombreArchivo = `caja-menor-${(caja.trabajador || "trabajador").replace(/[^a-zA-Z0-9._-]+/g, "_")}.pdf`;
+    const { trabajador, historialCajas, totalDado, totalGastado, restante, gastos } = data;
+    const nombreArchivo = `caja-menor-${trabajador.replace(/[^a-zA-Z0-9._-]+/g, "_")}.pdf`;
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${nombreArchivo}"`);
@@ -304,13 +319,9 @@ app.get("/api/caja-menor/:id/pdf", async (req, res) => {
     doc.fontSize(18).fillColor("#1F4E78").text("Reporte de caja menor", { align: "left" });
     doc.moveDown(0.3);
     doc.fontSize(12).fillColor("#000000");
-    doc.text(`Trabajador: ${caja.trabajador || ""}`);
-    doc.text(`Fecha de entrega: ${(caja.fecha || "").toString().slice(0, 10)}`);
-    doc.text(`Valor entregado: ${fmtCOP_(caja.valorEntregado)}`);
-    if (deudaArrastrada > 0) {
-      doc.text(`Deuda arrastrada de la caja anterior: ${fmtCOP_(deudaArrastrada)}`);
-    }
-    doc.text(`Total gastado: ${fmtCOP_(consumido)}`);
+    doc.text(`Trabajador: ${trabajador}`);
+    doc.text(`Total entregado (historico): ${fmtCOP_(totalDado)}`);
+    doc.text(`Total gastado (historico): ${fmtCOP_(totalGastado)}`);
     doc.fillColor(restante < 0 ? "#C0392B" : "#2E7D32");
     doc.text(restante < 0
       ? `Le deben al trabajador: ${fmtCOP_(-restante)}`
@@ -318,11 +329,22 @@ app.get("/api/caja-menor/:id/pdf", async (req, res) => {
     doc.fillColor("#000000");
     doc.moveDown();
 
-    doc.fontSize(13).text("Gastos cargados a esta caja menor", { underline: true });
+    doc.fontSize(13).text("Cajas menores asignadas", { underline: true });
+    doc.moveDown(0.3);
+    doc.fontSize(10);
+    if (!historialCajas.length) {
+      doc.text("No se han registrado cajas menores todavia.");
+    }
+    historialCajas.forEach((c) => {
+      doc.text(`${(c.fecha || "").toString().slice(0, 10)}   ${fmtCOP_(c.valor)}   ${c.obra || "(sin obra)"}${c.activa ? "  (activa)" : ""}`);
+    });
+    doc.moveDown();
+
+    doc.fontSize(13).text("Gastos reportados", { underline: true });
     doc.moveDown(0.3);
     doc.fontSize(10);
     if (!gastos.length) {
-      doc.text("No hay gastos cargados a esta caja menor todavia.");
+      doc.text("No hay gastos cargados a caja menor todavia.");
     }
     gastos.forEach((g, i) => {
       doc.text(`${i + 1}. ${(g.fecha || "").toString().slice(0, 10)} - ${g.comercio || "Sin nombre"}${g.nit ? " (NIT " + g.nit + ")" : ""}`);
@@ -441,11 +463,12 @@ app.get("/api/informe-pdf", async (req, res) => {
 
     // ---- Tabla resumen ----
     const columnas = [
-      { titulo: "Fecha", width: 55 },
-      { titulo: "Proveedor", width: 150 },
-      { titulo: "Categoria", width: 90 },
-      { titulo: "Estado", width: 130 },
-      { titulo: "Monto", width: 90, align: "right" },
+      { titulo: "Fecha", width: 50 },
+      { titulo: "Proveedor", width: 105 },
+      { titulo: "NIT", width: 75 },
+      { titulo: "Categoria", width: 70 },
+      { titulo: "Descripcion", width: 140 },
+      { titulo: "Monto", width: 75, align: "right" },
     ];
     const rowH = 20;
 
@@ -485,8 +508,9 @@ app.get("/api/informe-pdf", async (req, res) => {
       const celdas = [
         fmtFechaCorta_(g.fecha),
         g.comercio || "Sin nombre",
+        g.nit || "",
         g.categoria || "Otros",
-        g.estado || "Registrado",
+        g.descripcion || "",
         fmtCOP_(g.valor),
       ];
       columnas.forEach((c, ci) => {
