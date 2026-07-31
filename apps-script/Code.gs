@@ -3,7 +3,7 @@ var FOLDER_ID = "1D8FpmwzMobg4z6_6tYFuaPEqSAWYy730";
 
 // Columnas de la hoja "Gastos" (primera hoja): A Fecha, B Descripcion, C Comercio,
 // D Categoria, E Valor, F Estado, G (sin uso, antes Notas), H Foto, I Foto URL, J Registrado,
-// K Obra, L ID, M NIT, N Trabajador (caja menor), O CajaMenorId
+// K Obra, L ID, M NIT, N Trabajador (caja menor), O CajaMenorId, P IVA
 
 function doPost(e) {
   try {
@@ -37,6 +37,7 @@ function crearGasto_(body) {
   var nit = body.nit || "";
   var estado = body.estado || "Pendiente revision";
   var trabajador = body.trabajador || "";
+  var iva = body.iva || "";
 
   var folder = DriveApp.getFolderById(FOLDER_ID);
   var decoded = Utilities.base64Decode(body.fotoBase64);
@@ -58,15 +59,16 @@ function crearGasto_(body) {
   sheet.appendRow([
     fecha, descripcion, comercio, categoria, valor, estado, notas,
     '=IMAGE("' + thumbnailUrl + '")', viewUrl, new Date().toISOString(), obra, id, nit,
-    trabajador, cajaMenorId,
+    trabajador, cajaMenorId, iva,
   ]);
 
   return jsonOutput_({
     ok: true, id: id, fecha: fecha, descripcion: descripcion, comercio: comercio,
     categoria: categoria, valor: valor, obra: obra, nit: nit, fotoUrl: viewUrl,
-    estado: estado, trabajador: trabajador,
+    estado: estado, trabajador: trabajador, iva: iva,
   });
 }
+
 function editarGasto_(body) {
   var sheet = hojaGastos_();
   var lastRow = sheet.getLastRow();
@@ -87,6 +89,7 @@ function editarGasto_(body) {
   if (body.estado) sheet.getRange(rowIndex, 6).setValue(body.estado);
   sheet.getRange(rowIndex, 11).setValue(body.obra || "");
   sheet.getRange(rowIndex, 13).setValue(body.nit || "");
+  sheet.getRange(rowIndex, 16).setValue(body.iva || "");
 
   var trabajador = body.trabajador || "";
   var cajaMenorId = "";
@@ -115,6 +118,7 @@ function eliminarGasto_(body) {
   sheet.deleteRow(rowIndex);
   return jsonOutput_({ ok: true });
 }
+
 function doGet(e) {
   try {
     if (e.parameter.obras === "1") {
@@ -129,56 +133,63 @@ function doGet(e) {
         gastos: obtenerGastosDeCaja_(e.parameter.cajaMenorId),
       });
     }
-    if (e.parameter.desde && e.parameter.hasta) {
-      return jsonOutput_(obtenerGastosPorRango_(e.parameter.desde, e.parameter.hasta));
-    }
-    if (e.parameter.mes && e.parameter.anio) {
+
+    var filtros = {
+      desde: e.parameter.desde || "",
+      hasta: e.parameter.hasta || "",
+      obras: e.parameter.obra ? e.parameter.obra.split(",").filter(Boolean) : [],
+      trabajadores: e.parameter.trabajador ? e.parameter.trabajador.split(",").filter(Boolean) : [],
+    };
+    // Compatibilidad con el modo viejo mes/anio (ya no lo usa el frontend, pero no rompe si llega).
+    if (!filtros.desde && !filtros.hasta && e.parameter.mes && e.parameter.anio) {
       var mes = parseInt(e.parameter.mes, 10);
       var anio = parseInt(e.parameter.anio, 10);
-      return jsonOutput_(obtenerGastosPorMes_(mes, anio));
+      var ultimoDia = new Date(anio, mes, 0).getDate();
+      filtros.desde = anio + "-" + String(mes).padStart(2, "0") + "-01";
+      filtros.hasta = anio + "-" + String(mes).padStart(2, "0") + "-" + String(ultimoDia).padStart(2, "0");
     }
-    var sheet = hojaGastos_();
-    var lastRow = sheet.getLastRow();
-    if (lastRow < 2) return jsonOutput_([]);
-    var numRows = Math.min(30, lastRow - 1);
-    var startRow = lastRow - numRows + 1;
-    var values = sheet.getRange(startRow, 1, numRows, 15).getValues();
-    var gastos = values.map(filaAGasto_).reverse();
-    return jsonOutput_(gastos);
+
+    return jsonOutput_(obtenerGastosFiltrados_(filtros));
   } catch (err) {
     return jsonOutput_({ error: String(err) });
   }
 }
 
-function obtenerGastosPorMes_(mes, anio) {
+// Devuelve los gastos que cumplen TODOS los criterios recibidos (AND). Cualquier
+// criterio vacio/ausente se ignora. Sin ningun criterio, devuelve todos los gastos
+// (limitado a un tope de seguridad para evitar timeouts en hojas enormes).
+function obtenerGastosFiltrados_(filtros) {
+  var TOPE_SEGURIDAD = 3000;
   var sheet = hojaGastos_();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
-  var values = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
-  var gastos = [];
-  values.forEach(function (r) {
-    var partes = obtenerAnioMes_(r[0]);
-    if (partes && partes.mes === mes && partes.anio === anio) {
-      gastos.push(filaAGasto_(r));
-    }
-  });
-  gastos.reverse();
-  return gastos;
-}
 
-function obtenerGastosPorRango_(desde, hasta) {
-  var sheet = hojaGastos_();
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-  var values = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
+  var totalFilas = lastRow - 1;
+  var numFilas = Math.min(totalFilas, TOPE_SEGURIDAD);
+  var startRow = lastRow - numFilas + 1;
+  var values = sheet.getRange(startRow, 1, numFilas, 16).getValues();
+
+  var desde = filtros.desde || "";
+  var hasta = filtros.hasta || "";
+  var obras = filtros.obras || [];
+  var trabajadores = filtros.trabajadores || [];
+
   var gastos = [];
   values.forEach(function (r) {
-    var fechaTexto = fechaATexto_(r[0]);
-    if (fechaTexto && fechaTexto >= desde && fechaTexto <= hasta) {
-      gastos.push(filaAGasto_(r));
+    if (desde && hasta) {
+      var fechaTexto = fechaATexto_(r[0]);
+      if (!fechaTexto || fechaTexto < desde || fechaTexto > hasta) return;
     }
+    if (obras.length && obras.indexOf(r[10]) === -1) return;
+    if (trabajadores.length) {
+      var trabajadorFila = r[13] || "";
+      var esSinCaja = trabajadores.indexOf("__sin_caja__") !== -1 && !trabajadorFila;
+      var coincideNombre = trabajadorFila && trabajadores.indexOf(trabajadorFila) !== -1;
+      if (!esSinCaja && !coincideNombre) return;
+    }
+    gastos.push(filaAGasto_(r));
   });
-  gastos.reverse();
+  gastos.reverse(); // mas reciente agregado primero
   return gastos;
 }
 
@@ -191,24 +202,12 @@ function fechaATexto_(fecha) {
   var m = texto.match(/(\d{4}-\d{2}-\d{2})/);
   return m ? m[1] : texto.slice(0, 10);
 }
-function obtenerAnioMes_(fecha) {
-  if (fecha === null || fecha === undefined || fecha === "") return null;
-  var texto;
-  if (typeof fecha === "object" && typeof fecha.getFullYear === "function") {
-    texto = Utilities.formatDate(fecha, Session.getScriptTimeZone(), "yyyy-MM-dd");
-  } else {
-    texto = String(fecha);
-  }
-  var m = texto.match(/(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return { anio: parseInt(m[1], 10), mes: parseInt(m[2], 10) };
-  return null;
-}
 
 function filaAGasto_(r) {
   return {
     fecha: r[0], descripcion: r[1], comercio: r[2], categoria: r[3],
     valor: r[4], estado: r[5], fotoUrl: r[8], obra: r[10], id: r[11],
-    nit: r[12], trabajador: r[13] || "", cajaMenorId: r[14] || "",
+    nit: r[12], trabajador: r[13] || "", cajaMenorId: r[14] || "", iva: r[15] || "",
   };
 }
 
@@ -246,6 +245,7 @@ function crearTrabajador_(body) {
   sheet.appendRow([nombre, true]);
   return jsonOutput_({ ok: true });
 }
+
 function crearCajaMenor_(body) {
   var trabajador = (body.trabajador || "").trim();
   var fecha = body.fecha || "";
@@ -305,6 +305,7 @@ function consumidoDeCaja_(cajaId) {
   }
   return total;
 }
+
 function obtenerCajaPorId_(cajaId) {
   var sheet = hojaCajasMenores_();
   var lastRow = sheet.getLastRow();
@@ -326,7 +327,7 @@ function obtenerGastosDeCaja_(cajaId) {
   var sheet = hojaGastos_();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
-  var values = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
+  var values = sheet.getRange(2, 1, lastRow - 1, 16).getValues();
   var gastos = [];
   values.forEach(function (r) {
     if (r[14] === cajaId) gastos.push(filaAGasto_(r));
@@ -370,6 +371,7 @@ function obtenerTrabajadoresConCajas_() {
     return { nombre: nombre, cajaActiva: cajaActiva, historial: cajasDelTrabajador };
   });
 }
+
 // ---------- Utilidades de hojas ----------
 
 function hojaGastos_() {
