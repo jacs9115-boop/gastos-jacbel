@@ -345,11 +345,43 @@
     <label for="nuevaCajaFecha">Fecha de entrega</label>
     <input type="date" id="nuevaCajaFecha" />
   </div>
+  <div class="field">
+    <label for="nuevaCajaObra">Obra</label>
+    <select id="nuevaCajaObra">
+      <option value="">Selecciona una obra</option>
+    </select>
+  </div>
   <div class="hint" id="avisoCajaActiva" style="display:none; margin-bottom:10px;">Este trabajador ya tiene una caja menor activa; al guardar, esa caja se cierra y esta nueva pasa a ser la activa.</div>
-  <div class="aviso" id="avisoDeuda" style="display:none;"></div>
   <button type="button" class="btn-primary" id="btnGuardarNuevaCaja">Guardar</button>
   <button type="button" class="btn-secondary" id="btnCancelarNuevaCaja">Cancelar</button>
   <div class="status" id="statusNuevaCaja"></div>
+</div>
+
+<div class="sheet-overlay" id="overlayEditarCaja"></div>
+
+<div class="sheet" id="sheetEditarCaja">
+  <h2>Editar caja menor</h2>
+  <div class="field">
+    <label>Trabajador</label>
+    <input type="text" id="editCajaTrabajadorTexto" disabled />
+  </div>
+  <div class="field">
+    <label for="editCajaValor">Valor entregado (COP)</label>
+    <input type="number" id="editCajaValor" min="0" step="1" />
+  </div>
+  <div class="field">
+    <label for="editCajaFecha">Fecha de entrega</label>
+    <input type="date" id="editCajaFecha" />
+  </div>
+  <div class="field">
+    <label for="editCajaObra">Obra</label>
+    <select id="editCajaObra">
+      <option value="">Selecciona una obra</option>
+    </select>
+  </div>
+  <button type="button" class="btn-primary" id="btnGuardarEditarCaja">Guardar cambios</button>
+  <button type="button" class="btn-secondary" id="btnCancelarEditarCaja">Cancelar</button>
+  <div class="status" id="statusEditarCaja"></div>
 </div>
 
 <div class="pdf-preview" id="pdfPreview">
@@ -428,11 +460,21 @@ const sheetNuevaCaja = document.getElementById("sheetNuevaCaja");
 const nuevaCajaTrabajadorTexto = document.getElementById("nuevaCajaTrabajadorTexto");
 const nuevaCajaValor = document.getElementById("nuevaCajaValor");
 const nuevaCajaFecha = document.getElementById("nuevaCajaFecha");
+const nuevaCajaObraSelect = document.getElementById("nuevaCajaObra");
 const avisoCajaActiva = document.getElementById("avisoCajaActiva");
-const avisoDeuda = document.getElementById("avisoDeuda");
 const btnGuardarNuevaCaja = document.getElementById("btnGuardarNuevaCaja");
 const btnCancelarNuevaCaja = document.getElementById("btnCancelarNuevaCaja");
 const statusNuevaCaja = document.getElementById("statusNuevaCaja");
+
+const overlayEditarCaja = document.getElementById("overlayEditarCaja");
+const sheetEditarCaja = document.getElementById("sheetEditarCaja");
+const editCajaTrabajadorTexto = document.getElementById("editCajaTrabajadorTexto");
+const editCajaValor = document.getElementById("editCajaValor");
+const editCajaFecha = document.getElementById("editCajaFecha");
+const editCajaObraSelect = document.getElementById("editCajaObra");
+const btnGuardarEditarCaja = document.getElementById("btnGuardarEditarCaja");
+const btnCancelarEditarCaja = document.getElementById("btnCancelarEditarCaja");
+const statusEditarCaja = document.getElementById("statusEditarCaja");
 
 const pdfPreview = document.getElementById("pdfPreview");
 const pdfPreviewFrame = document.getElementById("pdfPreviewFrame");
@@ -667,25 +709,24 @@ function poblarSelectObra_(select, valorPreseleccionado) {
   select.value = actual;
 }
 
+const TODOS_LOS_SELECTS_OBRA_ = [obraSelect, editObraSelect, nuevaCajaObraSelect, editCajaObraSelect];
+
 function manejarCambioObra_(select) {
   if (select.value !== "__nueva__") return;
   const nombre = prompt("Nombre de la nueva obra:");
   if (!nombre || !nombre.trim()) { select.value = ""; return; }
   const limpio = nombre.trim();
   if (!obrasActuales.includes(limpio)) obrasActuales.push(limpio);
-  poblarSelectObra_(obraSelect, obraSelect === select ? limpio : undefined);
-  poblarSelectObra_(editObraSelect, editObraSelect === select ? limpio : undefined);
+  TODOS_LOS_SELECTS_OBRA_.forEach((s) => poblarSelectObra_(s, s === select ? limpio : undefined));
 }
-obraSelect.addEventListener("change", () => manejarCambioObra_(obraSelect));
-editObraSelect.addEventListener("change", () => manejarCambioObra_(editObraSelect));
+TODOS_LOS_SELECTS_OBRA_.forEach((s) => s.addEventListener("change", () => manejarCambioObra_(s)));
 
 async function cargarObras() {
   try {
     const res = await fetch(API_BASE + "/api/obras");
     const data = await res.json();
     obrasActuales = Array.isArray(data) ? data : [];
-    poblarSelectObra_(obraSelect);
-    poblarSelectObra_(editObraSelect);
+    TODOS_LOS_SELECTS_OBRA_.forEach((s) => poblarSelectObra_(s));
     if (sheetMes.classList.contains("open")) renderChecklistObras_();
   } catch (e) {
     // sin conexion: los selects quedan solo con la opcion de agregar nueva
@@ -894,24 +935,16 @@ function renderTrabajadores_() {
     return;
   }
   listaTrabajadores.innerHTML = trabajadoresActuales.map((t) => {
-    const c = t.cajaActiva;
-    let infoHtml;
-    let barraHtml = "";
-    if (c) {
-      const pct = c.valorEntregado > 0 ? Math.min(100, Math.round(((c.deudaArrastrada + c.consumido) / c.valorEntregado) * 100)) : 0;
-      const deudaTexto = c.deudaArrastrada ? ` (incluye deuda anterior de ${fmt.format(c.deudaArrastrada)})` : "";
-      const saldoTexto = c.restante < 0 ? `debe ${fmt.format(-c.restante)}` : `resta ${fmt.format(c.restante)}`;
-      infoHtml = `<div class="caja-info activa">${fmt.format(c.valorEntregado)} entregado el ${(c.fecha || "").slice(0, 10)}${deudaTexto} · consumido ${fmt.format(c.consumido)} · ${saldoTexto}</div>`;
-      barraHtml = `<div class="barra"><div class="barra-fill" style="width:${pct}%"></div></div>`;
-    } else {
-      infoHtml = `<div class="caja-info">Sin caja menor activa</div>`;
-    }
-    const historialCerrado = (t.historial || []).filter((h) => !h.activa);
-    const historialHtml = historialCerrado.length
-      ? `<div class="historial">Historial: ${historialCerrado.map((h) => `${(h.fecha || "").slice(0, 10)} — ${fmt.format(h.valorEntregado)} (gastado ${fmt.format(h.consumido)})`).join(" · ")}</div>`
-      : "";
+    const pct = t.totalDado > 0 ? Math.min(100, Math.round((t.totalGastado / t.totalDado) * 100)) : 0;
+    const saldoTexto = t.restante < 0 ? `debe ${fmt.format(-t.restante)}` : `resta ${fmt.format(t.restante)}`;
+    const infoHtml = `<div class="caja-info${t.tieneCajaActiva ? " activa" : ""}">Total dado: ${fmt.format(t.totalDado)} · Gastado: ${fmt.format(t.totalGastado)} · Saldo: ${saldoTexto}</div>`;
+    const barraHtml = t.totalDado > 0 ? `<div class="barra"><div class="barra-fill" style="width:${pct}%"></div></div>` : "";
+    const historial = t.historialCajas || [];
     const nombreEscapado = t.nombre.replace(/'/g, "\\'");
-    const pdfBtnHtml = c ? `<button type="button" class="pdf-btn" onclick="abrirReporteCaja('${nombreEscapado}', '${c.id}')" aria-label="Generar reporte PDF">📄</button>` : "";
+    const historialHtml = historial.length
+      ? `<div class="historial">${historial.map((h) => `${(h.fecha || "").slice(0, 10)} — ${fmt.format(h.valor)}${h.obra ? " — " + h.obra : ""}${h.activa ? " (activa)" : ""} <button type="button" class="edit-link" onclick="abrirEditarCaja('${h.id}')">✏️</button>`).join("<br/>")}</div>`
+      : `<div class="historial">Todavía no se le ha dado ninguna caja menor.</div>`;
+    const pdfBtnHtml = historial.length ? `<button type="button" class="pdf-btn" onclick="abrirReporteCaja('${nombreEscapado}')" aria-label="Generar reporte PDF">📄</button>` : "";
     return `
     <div class="trabajador-row">
       <div class="nombre-row">
@@ -921,7 +954,7 @@ function renderTrabajadores_() {
       ${infoHtml}
       ${barraHtml}
       ${historialHtml}
-      <button type="button" class="btn-mini" onclick="abrirNuevaCaja('${nombreEscapado}')">💵 ${c ? "Dar nueva caja menor" : "Dar caja menor"}</button>
+      <button type="button" class="btn-mini" onclick="abrirNuevaCaja('${nombreEscapado}')">💵 ${t.tieneCajaActiva ? "Dar nueva caja menor" : "Dar caja menor"}</button>
     </div>`;
   }).join("");
 }
@@ -933,9 +966,9 @@ async function cargarTrabajadores() {
     trabajadoresActuales = Array.isArray(data) ? data : [];
     renderTrabajadores_();
     if (sheetMes.classList.contains("open")) renderChecklistTrabajadores_();
-    const conCaja = trabajadoresActuales.filter((t) => t.cajaActiva);
+    const conCaja = trabajadoresActuales.filter((t) => t.tieneCajaActiva);
     const opcionesHtml = conCaja.length
-      ? conCaja.map((t) => `<option value="${t.nombre}">${t.nombre} (resta ${fmt.format(t.cajaActiva.restante)})</option>`).join("")
+      ? conCaja.map((t) => `<option value="${t.nombre}">${t.nombre} (resta ${fmt.format(t.restante)})</option>`).join("")
       : '<option value="">No hay trabajadores con caja activa</option>';
     trabajadorCajaSelect.innerHTML = opcionesHtml;
     const trabajadorEditPrevio = editTrabajadorCajaSelect.value;
@@ -968,17 +1001,11 @@ btnAgregarTrabajador.addEventListener("click", async () => {
 
 function abrirNuevaCaja(nombre) {
   const t = trabajadoresActuales.find((x) => x.nombre === nombre);
-  const c = t && t.cajaActiva;
   nuevaCajaTrabajadorTexto.value = nombre;
   nuevaCajaValor.value = "";
   nuevaCajaFecha.value = hoyLocal_();
-  avisoCajaActiva.style.display = c ? "block" : "none";
-  if (c && c.restante < 0) {
-    avisoDeuda.style.display = "block";
-    avisoDeuda.textContent = `Este trabajador debe ${fmt.format(-c.restante)} de la caja anterior. Ese valor se descontará automáticamente del saldo de la nueva caja menor.`;
-  } else {
-    avisoDeuda.style.display = "none";
-  }
+  poblarSelectObra_(nuevaCajaObraSelect, "");
+  avisoCajaActiva.style.display = (t && t.tieneCajaActiva) ? "block" : "none";
   statusNuevaCaja.textContent = "";
   sheetNuevaCaja.dataset.trabajador = nombre;
   overlayNuevaCaja.classList.add("open");
@@ -997,6 +1024,7 @@ btnGuardarNuevaCaja.addEventListener("click", async () => {
   const trabajador = sheetNuevaCaja.dataset.trabajador;
   const valor = Number(nuevaCajaValor.value) || 0;
   const fecha = nuevaCajaFecha.value;
+  const obra = nuevaCajaObraSelect.value === "__nueva__" ? "" : nuevaCajaObraSelect.value;
   if (!valor || valor <= 0) { statusNuevaCaja.textContent = "Escribe un valor mayor a 0."; return; }
   if (!fecha) { statusNuevaCaja.textContent = "Escribe la fecha de entrega."; return; }
   statusNuevaCaja.innerHTML = '<span class="spinner"></span> Guardando...';
@@ -1004,7 +1032,7 @@ btnGuardarNuevaCaja.addEventListener("click", async () => {
     const res = await fetch(API_BASE + "/api/caja-menor", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trabajador, valor, fecha }),
+      body: JSON.stringify({ trabajador, valor, fecha, obra }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Error al guardar la caja menor");
@@ -1013,6 +1041,58 @@ btnGuardarNuevaCaja.addEventListener("click", async () => {
     setTimeout(cerrarSheetNuevaCaja, 700);
   } catch (err) {
     statusNuevaCaja.textContent = "Error: " + err.message;
+  }
+});
+
+// ---------- Edición de una caja menor existente ----------
+
+function abrirEditarCaja(id) {
+  let caja = null;
+  let trabajador = "";
+  for (const t of trabajadoresActuales) {
+    const encontrada = (t.historialCajas || []).find((h) => h.id === id);
+    if (encontrada) { caja = encontrada; trabajador = t.nombre; break; }
+  }
+  if (!caja) return;
+  editCajaTrabajadorTexto.value = trabajador;
+  editCajaValor.value = caja.valor || 0;
+  editCajaFecha.value = (caja.fecha || "").slice(0, 10);
+  poblarSelectObra_(editCajaObraSelect, caja.obra || "");
+  statusEditarCaja.textContent = "";
+  sheetEditarCaja.dataset.id = id;
+  overlayEditarCaja.classList.add("open");
+  sheetEditarCaja.classList.add("open");
+}
+window.abrirEditarCaja = abrirEditarCaja;
+
+function cerrarSheetEditarCaja() {
+  overlayEditarCaja.classList.remove("open");
+  sheetEditarCaja.classList.remove("open");
+}
+btnCancelarEditarCaja.addEventListener("click", cerrarSheetEditarCaja);
+overlayEditarCaja.addEventListener("click", cerrarSheetEditarCaja);
+
+btnGuardarEditarCaja.addEventListener("click", async () => {
+  const id = sheetEditarCaja.dataset.id;
+  const valor = Number(editCajaValor.value) || 0;
+  const fecha = editCajaFecha.value;
+  const obra = editCajaObraSelect.value === "__nueva__" ? "" : editCajaObraSelect.value;
+  if (!valor || valor <= 0) { statusEditarCaja.textContent = "Escribe un valor mayor a 0."; return; }
+  if (!fecha) { statusEditarCaja.textContent = "Escribe la fecha de entrega."; return; }
+  statusEditarCaja.innerHTML = '<span class="spinner"></span> Guardando...';
+  try {
+    const res = await fetch(`${API_BASE}/api/caja-menor/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ valor, fecha, obra }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Error al guardar los cambios");
+    statusEditarCaja.textContent = "Cambios guardados ✓";
+    await cargarTrabajadores();
+    setTimeout(cerrarSheetEditarCaja, 700);
+  } catch (err) {
+    statusEditarCaja.textContent = "Error: " + err.message;
   }
 });
 
@@ -1070,10 +1150,10 @@ btnCompartirPreview.addEventListener("click", async () => {
   await compartirOGuardarPDF_(pdfPreviewActual.blob, pdfPreviewActual.nombreArchivo, pdfPreviewActual.titulo);
 });
 
-async function abrirReporteCaja(nombre, cajaId) {
+async function abrirReporteCaja(nombre) {
   statusTrabajador.innerHTML = '<span class="spinner"></span> Generando reporte...';
   try {
-    const res = await fetch(`${API_BASE}/api/caja-menor/${cajaId}/pdf`);
+    const res = await fetch(`${API_BASE}/api/trabajadores/${encodeURIComponent(nombre)}/caja-menor-pdf`);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.error || "No se pudo generar el reporte");
