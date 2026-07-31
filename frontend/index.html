@@ -68,8 +68,10 @@
   .gasto .meta { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
   .gasto .obra { font-size: 12px; color: var(--navy); font-weight: 600; margin-top: 2px; }
   .gasto .caja { font-size: 12px; color: var(--orange); font-weight: 600; margin-top: 2px; }
+  .gasto .ingreso-tag { font-size: 12px; color: var(--green); font-weight: 600; margin-top: 2px; }
   .gasto .desc { font-size: 12.5px; color: var(--muted); margin-top: 3px; font-style: italic; }
   .gasto .valor { font-weight: 700; font-size: 15px; white-space: nowrap; }
+  .gasto .valor.ingreso { color: var(--green); }
   .gasto .right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
   .badge { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 2px 8px;
     border-radius: 100px; background: var(--navy); color: #fff; opacity: 0.85; margin-top: 6px; }
@@ -133,6 +135,17 @@
   .trabajador-row .historial { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
   .trabajador-row .nombre-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .trabajador-row .pdf-btn { background: none; border: none; font-size: 19px; padding: 2px 4px; color: var(--navy); flex-shrink: 0; }
+  .obra-balance-row { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+  .obra-balance-row .nombre { font-weight: 700; font-size: 15px; }
+  .obra-balance-row .linea { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .obra-balance-row .balance { font-size: 14px; font-weight: 700; margin-top: 6px; }
+  .obra-balance-row .balance.positivo { color: var(--green); }
+  .obra-balance-row .balance.negativo { color: var(--red); }
+  .tipo-opciones { display: flex; flex-direction: column; gap: 12px; }
+  .tipo-opciones .btn-tipo { width: 100%; padding: 20px; border: none; border-radius: 14px;
+    font-weight: 700; font-size: 17px; margin-top: 0; }
+  .tipo-opciones .btn-tipo.gasto { background: var(--navy); color: #fff; }
+  .tipo-opciones .btn-tipo.ingreso { background: var(--green); color: #fff; }
   .pdf-preview { position: fixed; inset: 0; background: var(--bg); z-index: 50; display: none;
     flex-direction: column; }
   .pdf-preview.open { display: flex; }
@@ -154,6 +167,7 @@
     <h1>Gastos JACBEL</h1>
   </div>
   <div class="right">
+    <button type="button" class="icon-btn" id="btnBalance" aria-label="Ingresos por obra">📈</button>
     <button type="button" class="icon-btn" id="btnCajaMenor" aria-label="Caja menor">👛</button>
     <button type="button" class="total" id="btnMes">Cargando...</button>
   </div>
@@ -170,6 +184,17 @@
 </main>
 
 <button class="fab" id="btnAbrir" aria-label="Agregar gasto">+</button>
+
+<div class="sheet-overlay" id="overlayTipoRegistro"></div>
+
+<div class="sheet" id="sheetTipoRegistro">
+  <h2>¿Qué quieres registrar?</h2>
+  <div class="tipo-opciones">
+    <button type="button" class="btn-tipo gasto" id="btnElegirGasto">💸 Gasto</button>
+    <button type="button" class="btn-tipo ingreso" id="btnElegirIngreso">💰 Ingreso</button>
+  </div>
+  <button type="button" class="btn-secondary" id="btnCancelarTipoRegistro">Cancelar</button>
+</div>
 
 <div class="sheet-overlay" id="overlay"></div>
 
@@ -248,6 +273,21 @@
     </div>
   </div>
 
+  <div class="filtro-seccion">
+    <div class="titulo-seccion"><span>💸 Tipo de registro</span></div>
+    <div class="filtro-lista">
+      <label class="checkbox-row filtro-item" for="chkTipoGasto">
+        <input type="checkbox" id="chkTipoGasto" />
+        <span>💸 Gastos</span>
+      </label>
+      <label class="checkbox-row filtro-item" for="chkTipoIngreso">
+        <input type="checkbox" id="chkTipoIngreso" />
+        <span>💰 Ingresos</span>
+      </label>
+    </div>
+    <div class="hint">Si no marcas ninguno (o marcas los dos), se ven todos los registros.</div>
+  </div>
+
   <button type="button" class="btn-primary" id="btnAplicarFiltros">Aplicar filtros</button>
   <button type="button" class="btn-secondary" id="btnQuitarFiltros">Quitar todos los filtros (ver todos)</button>
   <div class="status" id="statusMes"></div>
@@ -310,6 +350,84 @@
     <button type="button" class="btn-secondary" id="btnCancelarEdit">Cancelar</button>
     <button type="button" class="btn-eliminar" id="btnEliminarEdit">🗑️ Eliminar gasto</button>
     <div class="status" id="statusEdit"></div>
+  </form>
+</div>
+
+<div class="sheet-overlay" id="overlayIngreso"></div>
+
+<div class="sheet" id="sheetIngreso">
+  <h2>Nuevo ingreso</h2>
+  <form id="formIngreso">
+    <div class="field">
+      <label for="ingresoObra">Obra</label>
+      <select id="ingresoObra" name="obra">
+        <option value="">Selecciona una obra</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="ingresoDescripcion">¿De qué es este ingreso? (opcional)</label>
+      <textarea id="ingresoDescripcion" name="descripcion" placeholder="Ej: anticipo del cliente, pago de la factura tal"></textarea>
+    </div>
+    <div class="field">
+      <label>Comprobante de consignación (opcional)</label>
+      <label class="photo-btn" id="ingresoPhotoLabel" for="ingresoFoto">📷 Tomar o elegir foto</label>
+      <input type="file" id="ingresoFoto" name="foto" accept="image/*" style="display:none" />
+      <img class="preview" id="ingresoPreview" alt="Vista previa del comprobante" />
+      <div class="hint">Si adjuntas una foto, la IA intenta leer la fecha, el valor y quién consignó.</div>
+    </div>
+    <div class="field">
+      <label for="ingresoFuente">Fuente / Quién consigna (opcional)</label>
+      <input type="text" id="ingresoFuente" placeholder="Nombre de quien hizo la consignación" />
+    </div>
+    <div class="field">
+      <label for="ingresoFecha">Fecha</label>
+      <input type="date" id="ingresoFecha" />
+    </div>
+    <div class="field">
+      <label for="ingresoValor">Valor (COP)</label>
+      <input type="number" id="ingresoValor" min="0" step="1" placeholder="Déjalo vacío si la foto lo va a leer" />
+    </div>
+    <button type="submit" class="btn-primary" id="btnGuardarIngreso">Guardar ingreso</button>
+    <button type="button" class="btn-secondary" id="btnCancelarIngreso">Cancelar</button>
+    <div class="status" id="statusIngreso"></div>
+  </form>
+</div>
+
+<div class="sheet-overlay" id="overlayEditIngreso"></div>
+
+<div class="sheet" id="sheetEditIngreso">
+  <h2>Editar ingreso</h2>
+  <div class="aviso" id="avisoEditIngreso" style="display:none;">No pudimos leer todos los datos de este comprobante automáticamente. Por favor completa o corrige los datos abajo.</div>
+  <form id="formEditIngreso">
+    <div class="field">
+      <label for="editIngresoObra">Obra</label>
+      <select id="editIngresoObra" name="obra">
+        <option value="">Selecciona una obra</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="editIngresoFecha">Fecha</label>
+      <input type="date" id="editIngresoFecha" name="fecha" />
+    </div>
+    <div class="field">
+      <label for="editIngresoValor">Valor (COP)</label>
+      <input type="number" id="editIngresoValor" name="valor" min="0" step="1" />
+    </div>
+    <div class="field">
+      <label for="editIngresoFuente">Fuente / Quién consigna</label>
+      <input type="text" id="editIngresoFuente" name="comercio" placeholder="Nombre de quien hizo la consignación" />
+    </div>
+    <div class="field">
+      <label for="editIngresoDescripcion">Descripción</label>
+      <textarea id="editIngresoDescripcion" name="descripcion"></textarea>
+    </div>
+    <div class="field" id="editIngresoVerComprobanteWrap" style="display:none;">
+      <a class="foto-link" id="editIngresoVerComprobante" href="#" target="_blank" rel="noopener">📎 Ver comprobante</a>
+    </div>
+    <button type="submit" class="btn-primary" id="btnGuardarEditIngreso">Guardar cambios</button>
+    <button type="button" class="btn-secondary" id="btnCancelarEditIngreso">Cancelar</button>
+    <button type="button" class="btn-eliminar" id="btnEliminarEditIngreso">🗑️ Eliminar ingreso</button>
+    <div class="status" id="statusEditIngreso"></div>
   </form>
 </div>
 
@@ -385,6 +503,15 @@
   <div class="status" id="statusEditarCaja"></div>
 </div>
 
+<div class="sheet-overlay" id="overlayBalance"></div>
+
+<div class="sheet" id="sheetBalance">
+  <h2>Ingresos por obra</h2>
+  <div id="listaBalance"></div>
+  <div class="status" id="statusBalance"></div>
+  <button type="button" class="btn-secondary" id="btnCerrarBalance">Cerrar</button>
+</div>
+
 <div class="pdf-preview" id="pdfPreview">
   <div class="pdf-preview-header">
     <span>Vista previa</span>
@@ -401,6 +528,12 @@
 const API_BASE = "";
 const CATEGORIAS = ["Materiales", "Combustible", "Alimentacion", "Herramientas",
   "Transporte", "Servicios", "Papeleria", "Mantenimiento", "Otros"];
+
+const overlayTipoRegistro = document.getElementById("overlayTipoRegistro");
+const sheetTipoRegistro = document.getElementById("sheetTipoRegistro");
+const btnElegirGasto = document.getElementById("btnElegirGasto");
+const btnElegirIngreso = document.getElementById("btnElegirIngreso");
+const btnCancelarTipoRegistro = document.getElementById("btnCancelarTipoRegistro");
 
 const overlay = document.getElementById("overlay");
 const sheet = document.getElementById("sheet");
@@ -446,6 +579,42 @@ const avisoEdit = document.getElementById("avisoEdit");
 const editEsCajaMenorCheckbox = document.getElementById("editEsCajaMenor");
 const editCampoTrabajadorCaja = document.getElementById("editCampoTrabajadorCaja");
 const editTrabajadorCajaSelect = document.getElementById("editTrabajadorCaja");
+
+const overlayIngreso = document.getElementById("overlayIngreso");
+const sheetIngreso = document.getElementById("sheetIngreso");
+const formIngreso = document.getElementById("formIngreso");
+const ingresoObraSelect = document.getElementById("ingresoObra");
+const ingresoDescripcionInput = document.getElementById("ingresoDescripcion");
+const ingresoFotoInput = document.getElementById("ingresoFoto");
+const ingresoPreview = document.getElementById("ingresoPreview");
+const ingresoFuenteInput = document.getElementById("ingresoFuente");
+const ingresoFechaInput = document.getElementById("ingresoFecha");
+const ingresoValorInput = document.getElementById("ingresoValor");
+const btnGuardarIngreso = document.getElementById("btnGuardarIngreso");
+const btnCancelarIngreso = document.getElementById("btnCancelarIngreso");
+const statusIngreso = document.getElementById("statusIngreso");
+
+const overlayEditIngreso = document.getElementById("overlayEditIngreso");
+const sheetEditIngreso = document.getElementById("sheetEditIngreso");
+const formEditIngreso = document.getElementById("formEditIngreso");
+const avisoEditIngreso = document.getElementById("avisoEditIngreso");
+const editIngresoObraSelect = document.getElementById("editIngresoObra");
+const editIngresoFechaInput = document.getElementById("editIngresoFecha");
+const editIngresoValorInput = document.getElementById("editIngresoValor");
+const editIngresoFuenteInput = document.getElementById("editIngresoFuente");
+const editIngresoDescripcionInput = document.getElementById("editIngresoDescripcion");
+const editIngresoVerComprobanteWrap = document.getElementById("editIngresoVerComprobanteWrap");
+const editIngresoVerComprobante = document.getElementById("editIngresoVerComprobante");
+const btnCancelarEditIngreso = document.getElementById("btnCancelarEditIngreso");
+const btnEliminarEditIngreso = document.getElementById("btnEliminarEditIngreso");
+const statusEditIngreso = document.getElementById("statusEditIngreso");
+
+const overlayBalance = document.getElementById("overlayBalance");
+const sheetBalance = document.getElementById("sheetBalance");
+const btnBalance = document.getElementById("btnBalance");
+const btnCerrarBalance = document.getElementById("btnCerrarBalance");
+const listaBalance = document.getElementById("listaBalance");
+const statusBalance = document.getElementById("statusBalance");
 
 const overlayCaja = document.getElementById("overlayCaja");
 const sheetCaja = document.getElementById("sheetCaja");
@@ -502,11 +671,11 @@ function formatoFechaCorta_(iso) {
 
 // ---------- Filtro de gastos (tipo Excel: obra + caja menor + rango de fechas, combinables) ----------
 
-let filtros = { obras: [], trabajadores: [], sinCaja: false, desde: "", hasta: "" };
+let filtros = { obras: [], trabajadores: [], sinCaja: false, desde: "", hasta: "", tipos: [] };
 
 function hayFiltrosActivos_() {
   return filtros.obras.length > 0 || filtros.trabajadores.length > 0 || filtros.sinCaja
-    || !!(filtros.desde && filtros.hasta);
+    || !!(filtros.desde && filtros.hasta) || filtros.tipos.length > 0;
 }
 
 function contarFiltrosActivos_() {
@@ -514,6 +683,7 @@ function contarFiltrosActivos_() {
   if (filtros.obras.length) n++;
   if (filtros.trabajadores.length || filtros.sinCaja) n++;
   if (filtros.desde && filtros.hasta) n++;
+  if (filtros.tipos.length) n++;
   return n;
 }
 
@@ -526,6 +696,7 @@ function construirResumenFiltros_() {
   if (filtros.desde && filtros.hasta) {
     partes.push(`Del ${formatoFechaCorta_(filtros.desde)} al ${formatoFechaCorta_(filtros.hasta)}`);
   }
+  if (filtros.tipos.length) partes.push(`Tipo: ${filtros.tipos.join(", ")}`);
   return partes.join(" · ");
 }
 
@@ -539,6 +710,7 @@ function construirQueryFiltros_() {
     params.set("desde", filtros.desde);
     params.set("hasta", filtros.hasta);
   }
+  if (filtros.tipos.length) params.set("tipo", filtros.tipos.join(","));
   return params.toString();
 }
 
@@ -577,6 +749,8 @@ function abrirSheetMes() {
   renderChecklistTrabajadores_();
   filtroDesdeInput.value = filtros.desde;
   filtroHastaInput.value = filtros.hasta;
+  document.getElementById("chkTipoGasto").checked = filtros.tipos.includes("Gasto");
+  document.getElementById("chkTipoIngreso").checked = filtros.tipos.includes("Ingreso");
   statusMes.textContent = "";
   overlayMes.classList.add("open");
   sheetMes.classList.add("open");
@@ -608,11 +782,17 @@ btnAplicarFiltros.addEventListener("click", () => {
     statusMes.textContent = "La fecha 'desde' no puede ser posterior a 'hasta'.";
     return;
   }
+  const tipoGasto = document.getElementById("chkTipoGasto").checked;
+  const tipoIngreso = document.getElementById("chkTipoIngreso").checked;
+  const tipos = [];
+  if (tipoGasto && !tipoIngreso) tipos.push("Gasto");
+  if (tipoIngreso && !tipoGasto) tipos.push("Ingreso");
+
   filtros = {
     obras: [...filtroObrasLista.querySelectorAll(".chk-obra:checked")].map((cb) => cb.value),
     trabajadores: [...filtroTrabajadoresLista.querySelectorAll(".chk-trabajador:checked")].map((cb) => cb.value),
     sinCaja: document.getElementById("chkSinCaja").checked,
-    desde, hasta,
+    desde, hasta, tipos,
   };
   statusMes.textContent = "";
   cerrarSheetMes();
@@ -620,7 +800,7 @@ btnAplicarFiltros.addEventListener("click", () => {
 });
 
 btnQuitarFiltros.addEventListener("click", () => {
-  filtros = { obras: [], trabajadores: [], sinCaja: false, desde: "", hasta: "" };
+  filtros = { obras: [], trabajadores: [], sinCaja: false, desde: "", hasta: "", tipos: [] };
   cerrarSheetMes();
   cargarGastos();
 });
@@ -646,6 +826,20 @@ async function generarInformePDF_() {
 }
 btnGenerarInforme.addEventListener("click", generarInformePDF_);
 
+function abrirSheetTipoRegistro() {
+  overlayTipoRegistro.classList.add("open");
+  sheetTipoRegistro.classList.add("open");
+}
+function cerrarSheetTipoRegistro() {
+  overlayTipoRegistro.classList.remove("open");
+  sheetTipoRegistro.classList.remove("open");
+}
+btnAbrir.addEventListener("click", abrirSheetTipoRegistro);
+btnCancelarTipoRegistro.addEventListener("click", cerrarSheetTipoRegistro);
+overlayTipoRegistro.addEventListener("click", cerrarSheetTipoRegistro);
+btnElegirGasto.addEventListener("click", () => { cerrarSheetTipoRegistro(); abrirSheet(); });
+btnElegirIngreso.addEventListener("click", () => { cerrarSheetTipoRegistro(); abrirSheetIngreso(); });
+
 function abrirSheet() {
   esCajaMenorCheckbox.checked = false;
   campoTrabajadorCaja.style.display = "none";
@@ -660,7 +854,6 @@ function cerrarSheet() {
   campoTrabajadorCaja.style.display = "none";
   status.textContent = "";
 }
-btnAbrir.addEventListener("click", abrirSheet);
 btnCancelar.addEventListener("click", cerrarSheet);
 overlay.addEventListener("click", cerrarSheet);
 
@@ -694,6 +887,17 @@ fotoInput.addEventListener("change", () => {
   reader.readAsDataURL(file);
 });
 
+ingresoFotoInput.addEventListener("change", () => {
+  const file = ingresoFotoInput.files[0];
+  if (!file) { ingresoPreview.style.display = "none"; return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    ingresoPreview.src = e.target.result;
+    ingresoPreview.style.display = "block";
+  };
+  reader.readAsDataURL(file);
+});
+
 const fmt = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
 
 let gastosActuales = [];
@@ -711,7 +915,7 @@ function poblarSelectObra_(select, valorPreseleccionado) {
   select.value = actual;
 }
 
-const TODOS_LOS_SELECTS_OBRA_ = [obraSelect, editObraSelect, nuevaCajaObraSelect, editCajaObraSelect];
+const TODOS_LOS_SELECTS_OBRA_ = [obraSelect, editObraSelect, nuevaCajaObraSelect, editCajaObraSelect, ingresoObraSelect, editIngresoObraSelect];
 
 function manejarCambioObra_(select) {
   if (select.value !== "__nueva__") return;
@@ -740,6 +944,7 @@ async function cargarObras() {
 function abrirEdicion(id, opts) {
   const g = gastosActuales.find((x) => x.id === id);
   if (!g) return;
+  if (g.tipo === "Ingreso") { abrirEdicionIngreso(id, opts); return; }
   document.getElementById("editFecha").value = (g.fecha || "").slice(0, 10);
   document.getElementById("editComercio").value = g.comercio || "";
   document.getElementById("editNit").value = g.nit || "";
@@ -765,7 +970,7 @@ function renderLista(gastos) {
   gastosActuales = gastos;
   const main = document.getElementById("lista");
 
-  const totalMes = gastos.reduce((sum, g) => sum + (g.valor || 0), 0);
+  const totalMes = gastos.reduce((sum, g) => sum + (g.tipo === "Ingreso" ? 0 : (g.valor || 0)), 0);
   const activos = hayFiltrosActivos_();
   const etiqueta = activos ? `Filtrado (${contarFiltrosActivos_()})` : "Todos";
   btnMes.innerHTML = `${etiqueta}: ${fmt.format(totalMes)} ▾`;
@@ -783,22 +988,24 @@ function renderLista(gastos) {
   }
 
   main.innerHTML = gastos.map((g) => {
+    const esIngreso = g.tipo === "Ingreso";
     const necesitaRevision = g.estado === "No se pudo leer - completar a mano";
     return `
     <div class="card gasto">
       <div class="left">
-        <div class="comercio">${g.comercio || "Sin nombre"}</div>
-        <div class="meta">${(g.fecha || "").slice(0, 10)} · ${g.categoria || "Otros"}${g.nit ? ` · NIT ${g.nit}` : ""}</div>
+        <div class="comercio">${g.comercio || (esIngreso ? "Sin fuente" : "Sin nombre")}</div>
+        <div class="meta">${(g.fecha || "").slice(0, 10)}${!esIngreso ? ` · ${g.categoria || "Otros"}` : ""}${g.nit ? ` · NIT ${g.nit}` : ""}</div>
         ${g.obra ? `<div class="obra">🏗️ ${g.obra}</div>` : ""}
         ${g.trabajador ? `<div class="caja">👛 ${g.trabajador} (caja menor)</div>` : ""}
+        ${esIngreso ? `<div class="ingreso-tag">💰 Ingreso</div>` : ""}
         ${g.descripcion ? `<div class="desc">"${g.descripcion}"</div>` : ""}
-        <span class="badge ${necesitaRevision ? "alerta" : ""}">${g.estado || "Registrado"}</span>
+        ${!esIngreso ? `<span class="badge ${necesitaRevision ? "alerta" : ""}">${g.estado || "Registrado"}</span>` : (necesitaRevision ? `<span class="badge alerta">${g.estado}</span>` : "")}
         <div class="links-row">
-          ${g.fotoUrl ? `<a class="foto-link" href="${g.fotoUrl}" target="_blank" rel="noopener">📎 Ver factura</a>` : ""}
+          ${g.fotoUrl ? `<a class="foto-link" href="${g.fotoUrl}" target="_blank" rel="noopener">📎 Ver ${esIngreso ? "comprobante" : "factura"}</a>` : ""}
           ${g.id ? `<button type="button" class="edit-link" onclick="abrirEdicion('${g.id}')">✏️ Editar</button>` : ""}
         </div>
       </div>
-      <div class="valor">${fmt.format(g.valor || 0)}</div>
+      <div class="valor${esIngreso ? " ingreso" : ""}">${esIngreso ? "+" : ""}${fmt.format(g.valor || 0)}</div>
     </div>`;
   }).join("");
 }
@@ -857,6 +1064,144 @@ form.addEventListener("submit", async (e) => {
     status.textContent = "Error: " + err.message;
   } finally {
     btnGuardar.disabled = false;
+  }
+});
+
+// ---------- Ingresos ----------
+
+function abrirSheetIngreso(obraPreseleccionada) {
+  formIngreso.reset();
+  ingresoPreview.style.display = "none";
+  poblarSelectObra_(ingresoObraSelect, obraPreseleccionada || "");
+  ingresoFechaInput.value = hoyLocal_();
+  statusIngreso.textContent = "";
+  overlayIngreso.classList.add("open");
+  sheetIngreso.classList.add("open");
+}
+window.abrirSheetIngreso = abrirSheetIngreso;
+function cerrarSheetIngreso() {
+  overlayIngreso.classList.remove("open");
+  sheetIngreso.classList.remove("open");
+}
+btnCancelarIngreso.addEventListener("click", cerrarSheetIngreso);
+overlayIngreso.addEventListener("click", cerrarSheetIngreso);
+
+formIngreso.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const obra = ingresoObraSelect.value === "__nueva__" ? "" : ingresoObraSelect.value;
+  const descripcion = ingresoDescripcionInput.value.trim();
+  const fuente = ingresoFuenteInput.value.trim();
+  const fecha = ingresoFechaInput.value;
+  const valor = ingresoValorInput.value;
+  const file = ingresoFotoInput.files[0];
+
+  if (!file && (!valor || Number(valor) <= 0)) {
+    statusIngreso.textContent = "Adjunta un comprobante o escribe el valor.";
+    return;
+  }
+
+  btnGuardarIngreso.disabled = true;
+  statusIngreso.innerHTML = file
+    ? '<span class="spinner"></span> Leyendo el comprobante con IA...'
+    : '<span class="spinner"></span> Guardando...';
+
+  const fd = new FormData();
+  fd.append("tipo", "Ingreso");
+  fd.append("descripcion", descripcion);
+  fd.append("obra", obra);
+  fd.append("fuente", fuente);
+  fd.append("fecha", fecha);
+  fd.append("valor", valor);
+  if (file) fd.append("foto", file);
+
+  try {
+    const res = await fetch(API_BASE + "/api/gastos", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Error al guardar");
+    cerrarSheetIngreso();
+    await cargarGastos();
+    await cargarObras();
+    if (data.necesitaRevision && data.id) {
+      abrirEdicionIngreso(data.id, { necesitaRevision: true, motivo: data.motivoRevision });
+    }
+  } catch (err) {
+    statusIngreso.textContent = "Error: " + err.message;
+  } finally {
+    btnGuardarIngreso.disabled = false;
+  }
+});
+
+function abrirEdicionIngreso(id, opts) {
+  const g = gastosActuales.find((x) => x.id === id);
+  if (!g) return;
+  poblarSelectObra_(editIngresoObraSelect, g.obra || "");
+  editIngresoFechaInput.value = (g.fecha || "").slice(0, 10);
+  editIngresoValorInput.value = g.valor || 0;
+  editIngresoFuenteInput.value = g.comercio || "";
+  editIngresoDescripcionInput.value = g.descripcion || "";
+  if (g.fotoUrl) {
+    editIngresoVerComprobante.href = g.fotoUrl;
+    editIngresoVerComprobanteWrap.style.display = "block";
+  } else {
+    editIngresoVerComprobanteWrap.style.display = "none";
+  }
+  formEditIngreso.dataset.id = id;
+  avisoEditIngreso.style.display = (opts && opts.necesitaRevision) ? "block" : "none";
+  avisoEditIngreso.textContent = (opts && opts.motivo)
+    || "No pudimos leer todos los datos de este comprobante automáticamente. Por favor completa o corrige los datos abajo.";
+  overlayEditIngreso.classList.add("open");
+  sheetEditIngreso.classList.add("open");
+}
+window.abrirEdicionIngreso = abrirEdicionIngreso;
+
+function cerrarSheetEditIngreso() {
+  overlayEditIngreso.classList.remove("open");
+  sheetEditIngreso.classList.remove("open");
+  statusEditIngreso.textContent = "";
+  avisoEditIngreso.style.display = "none";
+}
+btnCancelarEditIngreso.addEventListener("click", cerrarSheetEditIngreso);
+overlayEditIngreso.addEventListener("click", cerrarSheetEditIngreso);
+
+formEditIngreso.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = formEditIngreso.dataset.id;
+  const payload = {
+    fecha: editIngresoFechaInput.value,
+    comercio: editIngresoFuenteInput.value.trim(),
+    valor: Number(editIngresoValorInput.value) || 0,
+    obra: editIngresoObraSelect.value === "__nueva__" ? "" : editIngresoObraSelect.value,
+    descripcion: editIngresoDescripcionInput.value.trim(),
+  };
+  statusEditIngreso.innerHTML = '<span class="spinner"></span> Guardando...';
+  try {
+    const res = await fetch(`${API_BASE}/api/gastos/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Error al guardar los cambios");
+    statusEditIngreso.textContent = "Cambios guardados ✓";
+    setTimeout(() => { cerrarSheetEditIngreso(); cargarGastos(); cargarObras(); }, 700);
+  } catch (err) {
+    statusEditIngreso.textContent = "Error: " + err.message;
+  }
+});
+
+btnEliminarEditIngreso.addEventListener("click", async () => {
+  const id = formEditIngreso.dataset.id;
+  if (!id) return;
+  if (!confirm("¿Seguro que quieres eliminar este ingreso? Esta acción no se puede deshacer.")) return;
+  statusEditIngreso.innerHTML = '<span class="spinner"></span> Eliminando...';
+  try {
+    const res = await fetch(`${API_BASE}/api/gastos/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Error al eliminar el ingreso");
+    statusEditIngreso.textContent = "Ingreso eliminado ✓";
+    setTimeout(() => { cerrarSheetEditIngreso(); cargarGastos(); }, 500);
+  } catch (err) {
+    statusEditIngreso.textContent = "Error: " + err.message;
   }
 });
 
@@ -1185,6 +1530,49 @@ async function abrirReporteCaja(nombre) {
   }
 }
 window.abrirReporteCaja = abrirReporteCaja;
+
+// ---------- Ingresos por obra (balance) ----------
+
+function renderBalance_(balances) {
+  if (!balances.length) {
+    listaBalance.innerHTML = '<div class="hint">No hay obras registradas todavía.</div>';
+    return;
+  }
+  listaBalance.innerHTML = balances.map((b) => {
+    const balancePositivo = b.balance >= 0;
+    const nombreEscapado = b.obra.replace(/'/g, "\\'");
+    return `
+    <div class="obra-balance-row">
+      <div class="nombre">🏗️ ${b.obra}</div>
+      <div class="linea">Ingresó: ${fmt.format(b.totalIngreso)} · Gastó: ${fmt.format(b.totalGasto)}</div>
+      <div class="balance ${balancePositivo ? "positivo" : "negativo"}">${balancePositivo ? "Disponible" : "Excedido"}: ${fmt.format(Math.abs(b.balance))}</div>
+      <button type="button" class="btn-mini" onclick="cerrarSheetBalance(); abrirSheetIngreso('${nombreEscapado}');">💰 Agregar ingreso</button>
+    </div>`;
+  }).join("");
+}
+
+async function abrirSheetBalance() {
+  statusBalance.innerHTML = '<span class="spinner"></span> Cargando...';
+  listaBalance.innerHTML = "";
+  overlayBalance.classList.add("open");
+  sheetBalance.classList.add("open");
+  try {
+    const res = await fetch(API_BASE + "/api/balance-por-obra");
+    const data = await res.json();
+    statusBalance.textContent = "";
+    renderBalance_(Array.isArray(data) ? data : []);
+  } catch (err) {
+    statusBalance.textContent = "Error: " + err.message;
+  }
+}
+window.cerrarSheetBalance = cerrarSheetBalance;
+function cerrarSheetBalance() {
+  overlayBalance.classList.remove("open");
+  sheetBalance.classList.remove("open");
+}
+btnBalance.addEventListener("click", abrirSheetBalance);
+btnCerrarBalance.addEventListener("click", cerrarSheetBalance);
+overlayBalance.addEventListener("click", cerrarSheetBalance);
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
